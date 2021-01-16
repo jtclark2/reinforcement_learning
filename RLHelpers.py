@@ -12,7 +12,7 @@ def all_argmax(values):
     values = np.array(values)
     max_val = values.max()
     indices = []
-    for i, value in enumerate(values):  # not sure why we don't just enumerate, but ok...
+    for i, value in enumerate(values):
         if value == max_val:
             indices.append(i)
     return indices # np.random.choice(indices)
@@ -32,23 +32,21 @@ def one_hot(state, num_states):
 
 
 if __name__ == "__main__":
-    np.random.seed(0)
-    assert np.all(argmax([1,2,5,3,5,4,5,]) == 2)
-    assert np.all(argmax([1,2,5,3,5,4,5,]) == 4)
+    assert np.all(all_argmax([1,2,5,3,5,4,5,]) == [2,4,6])
 
     print("RLHelpers tests pass.")
 
-
+    # Timing test
     import time
     tic = time.time()
-    for i in range(10000):
+    for _ in range(10000):
         np.argmax([1,2,5,3,5,4,5,])
     toc = time.time()
     print("numpy time: ", toc-tic)
 
     tic = time.time()
     for i in range(10000):
-        argmax([1,2,5,3,5,4,5,])
+        all_argmax([1,2,5,3,5,4,5,])
     toc = time.time()
     print("custom time: ", toc-tic)
 
