@@ -264,6 +264,6 @@ if __name__ == "__main__":
     trainer.train_fixed_steps(total_episodes, max_steps, render_interval) # multiple runs for up to total_steps
 
     ############### Save to file and plot progress ###############
-    agent.save_learning(env_name)
+    agent.save_agent_memory(env_name)
     trainer.save_run_history(env_name)
     Trainer.plot(agent, np.array(trainer.rewards) )

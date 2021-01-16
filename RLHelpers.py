@@ -1,6 +1,6 @@
 import numpy as np
 
-def argmax(values):
+def all_argmax(values):
     """
     Takes in a list of values and returns the index of the item with the highest value.
     Unlike np.argmax, this function breaks ties randomly, encouraging exploration.
@@ -15,7 +15,7 @@ def argmax(values):
     for i, value in enumerate(values):  # not sure why we don't just enumerate, but ok...
         if value == max_val:
             indices.append(i)
-    return np.random.choice(indices)
+    return indices # np.random.choice(indices)
 
 
 def one_hot(state, num_states):

@@ -100,16 +100,16 @@ def plot(agent, results, smoothing = 100):
     smoothing = min(len(results)//2, smoothing)
     running_avg = [np.average(results[x:x+smoothing]) for x, _ in enumerate(results[:-smoothing])]
     x_axis = np.array([x for x, _ in enumerate(results)])
-    plt.figure(figsize=(15, 10), dpi=80, facecolor='w', edgecolor='k')
+    plt.figure(figsize=(12, 8), dpi=80, facecolor='w', edgecolor='k')
     plt.plot(running_avg)
     plt.xlabel("Episode")
     plt.ylabel("Average Reward per Episode")
     plt.yscale("linear")
-    # plt.ylim(-200, -75)
     plt.show()
 
 
 if __name__ == "__main__":
+    import gym
 
     class AgentStub:
         def __init__(self):
@@ -135,52 +135,33 @@ if __name__ == "__main__":
         def end(self, reward):
             pass
 
-    # agent = AgentStub()
+        def save_agent_memory(self, save_path):
+            pass
 
-    from Agents import SarsaAgent, QLearningAgent, SimpleNNAgent, Optimizers
-    from Encoders import TileCoder
-    import numpy as np
+        def load_agent_memory(self, load_path):
+            return True
 
-    # ---Specific to MountainCar-v0---
-    # # pos, vel
-    # env_name = 'MountainCar-v0'
-    # state_limits = np.array([[-1.2, 0.5], [-0.07, 0.07]])
-    # # Descent results from [16,16] to [32,32]. [64,64] gets unstable (even running 10x longer...not 100% sure why)
-    # feature_resolution = np.array([32,32])
-    # num_grids = 32
-    # # Turns out some epsilon is needed, despite optimistic initialize (run with 0 until plateau, then turn it on to see!)
-    # epsilon = 0.0 # 0.01
-    # gamma = 1  # discount factor
-    # alpha = 1/(2**1) # learning rate: .1 to .5 Converges in a few ~1000 episodes down to about -100
-
-    # # Specific to CartPole-v1
-    # # ??? pos, vel, ang_pos, ang_vel ???
-    # state_limits = np.array([[-2.5, 2.5], [-2.5, 2.5], [-0.3, 0.3], [-1, 1]])
-    # feature_resolution = np.array([16,16,16,16])
-    # num_grids = 32
-    # epsilon = 0.01  # In case of epsilon greedy exploration
-    # gamma = 1  # discount factor
-    # alpha = 0.1 # learning rate
-
-
-
+    agent = AgentStub()
+    agent_file_path = "" # We're not really saving, so it does not matter
+    load_status = agent.load_agent_memory(agent_file_path)
 
     # ############### Environment Setup (and configuration of agent for env) ###############
-    # env_name = 'MountainCar-v0'
-    # env = gym.make(env_name)
+    env_name = 'MountainCar-v0'
+    history_file_path = os.getcwd() + "/TrainingHistory/" + env_name
+    env = gym.make(env_name)
     #
     # ############### Trainer Setup (load run history) ###############
-    # trainer = Trainer(env, agent)
-    # if(load_status):
-    #     trainer.load_run_history(env_name)
-    #
-    # ############### Define Run inputs and Run ###############
-    # total_episodes = 200
-    # max_steps = 1000
-    # render_interval = 1000 # 0 is never
-    # trainer.train_fixed_steps(total_episodes, max_steps, render_interval) # multiple runs for up to total_steps
-    #
+    trainer = Trainer(env, agent)
+    if(load_status):
+        trainer.load_run_history(history_file_path)
+
+    ############### Define Run inputs and Run ###############
+    total_episodes = 200
+    max_steps = 1000 # turns out most gym.env environments auto-stop (really early in fact)
+    render_interval = 1000 # 0 is never
+    trainer.train_fixed_steps(total_episodes, max_steps, render_interval) # multiple runs for up to total_steps
+
     # ############### Save to file and plot progress ###############
-    # agent.save_learning(env_name)
-    # trainer.save_run_history(env_name)
-    # plot(agent, np.array(trainer.rewards) )
+    agent.save_agent_memory(agent_file_path)
+    trainer.save_run_history(history_file_path)
+    plot(agent, trainer.rewards)
