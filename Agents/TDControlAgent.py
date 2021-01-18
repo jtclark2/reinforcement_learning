@@ -37,6 +37,7 @@ class TDControlAgent:
         self.gamma = agent_info.get("gamma", 1) # discount factor
         self.alpha = agent_info["alpha"] # step size of learning rate
 
+        self.off_policy_agent = agent_info.get("off_policy_agent", None)
         self.algorithm = agent_info.get("algorithm", TdControlAlgorithm.QLearner)
         assert isinstance(self.algorithm, TdControlAlgorithm)
         self.name = self.algorithm.name
@@ -48,9 +49,10 @@ class TDControlAgent:
         """
         pass
 
-    def _select_action(self, state):
+    def select_action(self, state):
         """
-        I'd like to eventually pass this in as a policy class, but it lives here for now
+        Selects the next action, based on the current state.
+        Remains public due to off-policy learning applications.
         :return:
         """
         action_values = self.value_approximator.get_values(state)
@@ -61,7 +63,7 @@ class TDControlAgent:
                 greedy_choices = RLHelpers.all_argmax(action_values)  # act greedy
                 chosen_action = np.random.choice(greedy_choices)
 
-        return chosen_action, action_values[chosen_action]
+        return chosen_action # , action_values[chosen_action]
 
     def _get_policy(self, state):
         # Exploration
@@ -78,11 +80,14 @@ class TDControlAgent:
         return np.array(policy)
 
     def start(self, state):
-        current_action, _ = self._select_action(state)
+        if self.off_policy_agent is None:
+            next_action = self.select_action(state)
+        else:
+            next_action = self.off_policy_agent.select_action(state) # Yes, I'm using a private method, and may want to expose that again
 
         self.previous_state = state
-        self.previous_action = current_action
-        return self.previous_action
+        self.previous_action = next_action
+        return next_action
 
     def step(self, reward, state):
         """
@@ -93,19 +98,23 @@ class TDControlAgent:
         :return: None
         """
 
-        action_values = self.value_approximator.get_values(state)
-        next_action, next_action_value = self._select_action(state) # replace optimal_next_value with actual next_value for SARSA update
 
+        if self.off_policy_agent is None:
+            next_action = self.select_action(state)
+        else:
+            next_action = self.off_policy_agent.select_action(state) # Yes, I'm using a private method, and may want to expose that again
+        next_action_value = self.value_approximator.get_value(state, next_action)
         previous_action_value = self.value_approximator.get_value(self.previous_state, self.previous_action)
 
         # Update equation
         if self.algorithm == TdControlAlgorithm.QLearner:
-            optimal_next_value = action_values.max() # q_learning
-            delta = reward + self.gamma * optimal_next_value - previous_action_value # delta = error_term
+            action_values = self.value_approximator.get_values(state)
+            optimal_next_value = action_values.max()
+            delta = reward + self.gamma * optimal_next_value - previous_action_value
         elif self.algorithm == TdControlAlgorithm.Sarsa:
-            delta = reward + self.gamma * next_action_value - previous_action_value # delta = error_term
+            delta = reward + self.gamma * next_action_value - previous_action_value
         elif self.algorithm == TdControlAlgorithm.ExpectedSarsa:
-            delta = reward + self.gamma * np.sum(self._get_policy(state) * next_action_value) - previous_action_value  # delta = error_term
+            delta = reward + self.gamma * np.sum(self._get_policy(state) * next_action_value) - previous_action_value
         else:
             raise Exception("Invalid algorithm selected for TD Control Agent: %s. Select from TdControlAlgorithm enum.")
 
@@ -113,7 +122,7 @@ class TDControlAgent:
 
         self.previous_state = state
         self.previous_action = next_action
-        return self.previous_action
+        return next_action
 
     def end(self, reward):
         """
@@ -170,7 +179,7 @@ class TDControlAgent:
 
 
 if __name__ == "__main__":
-    from Agents import Optimizers
+    from Agents import HumanAgent
     from FunctionApproximators import TileCodingStateActionApproximator
     import Trainer
     import gym
@@ -204,15 +213,14 @@ if __name__ == "__main__":
 
     ############### Create And Configure Agent ###############
     # Tile Coder Setup
-
-    env = gym.make(env_name)
-
     agent_info = {"num_actions": env.action_space.n,
                   "epsilon": epsilon,
                   "gamma": gamma,
                   "alpha": alpha,
-                  "algorithm": TdControlAlgorithm.QLearner,
-                  "state_action_value_approximator": approximator}
+                  "algorithm": TdControlAlgorithm.Sarsa,
+                  "state_action_value_approximator": approximator,
+                  # "off_policy_agent": HumanAgent.HumanAgent(),
+                  }
 
     agent = TDControlAgent(agent_info)
     agent_file_path = os.getcwd() + r"/AgentMemory/Agent_%s_%s.p" % (agent.name, env_name)
@@ -229,6 +237,14 @@ if __name__ == "__main__":
     total_episodes = 500
     max_steps = 1000
     render_interval = 0 # 0 is never
+
+    off_policy_agent = agent_info.get("off_policy_agent", None)
+    if  off_policy_agent is not None and off_policy_agent.name == "Human":
+        # For human as the off-policy, I'm currently playing 'live', so I have to render, and limit episodes
+        total_episodes = 10
+        render_interval = 1
+
+
     trainer.train_fixed_steps(total_episodes, max_steps, render_interval) # multiple runs for up to total_steps
 
     ############### Save to file and plot progress ###############
