@@ -50,7 +50,6 @@ if __name__ == "__main__":
     toc = time.time()
     print("custom time: ", toc-tic)
 
-
     # Test one_hot
     encoding = one_hot(3, 10)
     expected = [0, 0, 0, 1, 0, 0, 0, 0, 0, 0]

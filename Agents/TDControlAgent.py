@@ -48,7 +48,7 @@ class TDControlAgent:
         """
         pass
 
-    def select_action(self, state):
+    def _select_action(self, state):
         """
         I'd like to eventually pass this in as a policy class, but it lives here for now
         :return:
@@ -63,7 +63,7 @@ class TDControlAgent:
 
         return chosen_action, action_values[chosen_action]
 
-    def get_policy(self, state):
+    def _get_policy(self, state):
         # Exploration
         policy = np.ones((self.num_actions))*self.epsilon/self.num_actions
 
@@ -78,7 +78,7 @@ class TDControlAgent:
         return np.array(policy)
 
     def start(self, state):
-        current_action, _ = self.select_action(state)
+        current_action, _ = self._select_action(state)
 
         self.previous_state = state
         self.previous_action = current_action
@@ -94,7 +94,7 @@ class TDControlAgent:
         """
 
         action_values = self.value_approximator.get_values(state)
-        next_action, next_action_value = self.select_action(state) # replace optimal_next_value with actual next_value for SARSA update
+        next_action, next_action_value = self._select_action(state) # replace optimal_next_value with actual next_value for SARSA update
 
         previous_action_value = self.value_approximator.get_value(self.previous_state, self.previous_action)
 
@@ -105,7 +105,7 @@ class TDControlAgent:
         elif self.algorithm == TdControlAlgorithm.Sarsa:
             delta = reward + self.gamma * next_action_value - previous_action_value # delta = error_term
         elif self.algorithm == TdControlAlgorithm.ExpectedSarsa:
-            delta = reward + self.gamma * np.sum(self.get_policy(state)*next_action_value) - previous_action_value  # delta = error_term
+            delta = reward + self.gamma * np.sum(self._get_policy(state) * next_action_value) - previous_action_value  # delta = error_term
         else:
             raise Exception("Invalid algorithm selected for TD Control Agent: %s. Select from TdControlAlgorithm enum.")
 
