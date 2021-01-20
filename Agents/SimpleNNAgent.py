@@ -165,8 +165,8 @@ class SimpleNNAgent:
         else: # normal step case
             current_action, next_value = self.select_action(state)
             v_optimal = self.get_all_action_values(state).max()
-            # delta = reward + self.discount_factor * next_value - previous_value # SARSA update
-            delta = reward + self.discount_factor * v_optimal - previous_value # Q AgentMemory Update
+            delta = reward + self.discount_factor * next_value - previous_value # SARSA update
+            # delta = reward + self.discount_factor * v_optimal - previous_value # Q AgentMemory Update
 
         ### Retrieve gradients and compute gradient descent step size
         grads = self.get_gradient(self.previous_state, self.previous_action)
@@ -213,7 +213,6 @@ class SimpleNNAgent:
             print("Warning: Unable to load file. Program will proceed without loading.")
             # time.sleep(3)
             return False
-
 
 
 if __name__ == "__main__":

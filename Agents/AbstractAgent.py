@@ -7,37 +7,38 @@ import RLHelpers
 
 
 class AbstractAgent:
-    def __init__(self):
-        pass
+    def __init__(self, agent_info={}):
+        raise NotImplementedError
 
-    def reset(self):
+    def reset(self, agent_info={}):
         """
-        Resets state and previous step variables. May also re-load anything from __init__ that may have been corrupted.
+        Setup for the agent called when the experiment first starts.
         :return: None
         """
-        raise NotImplementedError()
+        raise NotImplementedError
 
-    def start(self, start):
-        raise NotImplementedError()
+    def select_action(self, state):
+        """
+        Selects the next action, based on the current state.
+        Public due to off-policy learning applications.
+        :return:
+        """
+        raise NotImplementedError
 
-        self.last_action = None
-        self.previous_features = None
-        return self.last_action
+    def start(self, state):
+        raise NotImplementedError
 
-    def end(self):
-        raise NotImplementedError()
+    def step(self, reward, state):
+        raise NotImplementedError
 
-    def step(self):
-        raise NotImplementedError()
+    def end(self, reward):
+        raise NotImplementedError
 
     def message(self):
         pass
 
-    def save_state(self, path=None):
-        raise NotImplementedError()
+    def save_agent_memory(self, save_path):
+        raise NotImplementedError
 
-    def load_state(self, path=None):
-        raise NotImplementedError()
-
-
-
+    def load_agent_memory(self, load_path):
+        raise NotImplementedError

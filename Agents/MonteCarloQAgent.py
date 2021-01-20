@@ -1,27 +1,41 @@
-"""
-Still getting my head around all the different agents. I fully expect to refactor as I build different agents, but
-I'm not sure what methods/hierarchy I'll be using yet.
-"""
-
-import numpy as np
-from enum import Enum
-
-# Relative imports
 import RLHelpers
 import pickle
+import numpy as np
 import os
 
-class TdControlAlgorithm(Enum):
-    QLearner = 1
-    Sarsa = 2
-    ExpectedSarsa = 3
-
-class TDControlAgent:
-    """
-    This agent implements QLearning and SARSA.
-    """
+class MonteCarloQAgent:
     def __init__(self, agent_info={}):
+        """
+        Monty Carlo methods DO NOT LEARN if they do not terminate. Therefore, this algorithm can get stuck...
+        and it does ALL the time. This video doesn't focus on this aspect, but it does note it:
+        https://www.coursera.org/learn/sample-based-learning-methods/lecture/RZeRQ/sarsa-in-the-windy-grid-world
 
+        How to overcome not finishing (ie: not knowing if you did better or worse than other times):
+        1) Exploring Starts (not used): Only works if you have enough control over the environment to start in arbitrary/random
+        states.
+        2) Off-Policy learning (not used): Follow a known policy (even a suboptimal one), as long as it finishes a descent chunk of the
+        time. However, needing another policy is a big drawback to begin with. Also, you should then use importance
+        sampling, which requires knowledge of the policy you are sampling from. That means either having the policy,
+        or building a sampled model (eg: if you're using playback). I played with it a bit (ignoring importance
+        sampling) just to convince myself it works. If you're policy is close-ish to optimal, then it works well enough.
+        3) Intermediate Rewards : Give it intermediate rewards, such as how far towards the goal it has traveled. This
+        works reasonably well, but introduces risk of perverse incentives emerging. In other words, it may find a way to
+        optimize the reward which does not line up with the ultimate objective.
+            In order for this to improve in a stable way, gamma < 1. I think this is because the system can wander
+            significantly before reaching the end of it's run, and it doesn't always know which of that wandering was
+            helpful. By utilizing the discount factor, you can decrease the impact of some of that wandering. In the
+            tabular form of this problem (I've written this more generally) you would ignore any loops in the path that
+            cycle back to a previously encountered state. The discount factor is less precise, but has a similar effect.
+
+        On top of all that, it learns much slower than Q-learning, both because of the information that is being ignored
+        with respect to adjacent state-values, and because it's a higher variance algorithm, so I had to low alpha
+        significantly (by 8x).
+
+        In conclusion, great tool as a thought experiment, but I can't think of any real-world application where
+        it's performance comes close to TD learners, such as Q-Learning and SARSA.
+
+        :param agent_info:
+        """
         # Defined by the environment
         self.num_actions = agent_info["num_actions"] # number of available actions; must be defined
 
@@ -30,24 +44,24 @@ class TDControlAgent:
         self.previous_state = None
 
         # Encoding (this has been encapsulated in it's own class, for dependency inversion)
-        self.value_approximator = agent_info["state_action_value_approximator"]
+        self.value_approximator = agent_info["state_action_value_approximator"] # no default value ( we want to fail here if encoder is not provided )
 
         # Hyperparameters
         self.epsilon = agent_info.get("epsilon", 0.01) # In case of epsilon greedy exploration
         self.gamma = agent_info.get("gamma", 1) # discount factor
         self.alpha = agent_info["alpha"] # step size of learning rate
 
-        self.off_policy_agent = agent_info.get("off_policy_agent", None)
-        self.algorithm = agent_info.get("algorithm", TdControlAlgorithm.QLearner)
-        assert isinstance(self.algorithm, TdControlAlgorithm)
-        self.name = self.algorithm.name
+        self.name = "MonteCarloQ"
+        self.run_history = []
+
 
     def reset(self, agent_info={}):
         """
         Setup for the agent called when the experiment first starts.
         :return: None
         """
-        pass
+        self.run_history = []
+        self.best_yet = -10000000 # DELETE
 
     def select_action(self, state):
         """
@@ -59,83 +73,52 @@ class TDControlAgent:
 
         if np.random.random() < self.epsilon:
             chosen_action = np.random.choice(self.num_actions)  # randomly explore
+
+            # The next 2 lines are cheating - they are specific to mountain car, as pseudo off-policy learning
+            # if self.previous_action is None: self.previous_action = 0
+            # chosen_action = self.previous_action
         else:
                 greedy_choices = RLHelpers.all_argmax(action_values)  # act greedy
                 chosen_action = np.random.choice(greedy_choices)
 
         return chosen_action # , action_values[chosen_action]
 
-    def _get_policy(self, state):
-        # Exploration
-        policy = np.ones((self.num_actions))*self.epsilon/self.num_actions
-
-        # Greedy
-        action_values = self.value_approximator.get_values(state)
-        greedy_choices = RLHelpers.all_argmax(action_values) # technically
-        policy[greedy_choices] += (1 - epsilon)/len(greedy_choices)
-
-        assert .999 < policy.sum() < 1.001
-        return np.array(policy)
-
     def start(self, state):
-        if self.off_policy_agent is None:
-            next_action = self.select_action(state)
-        else:
-            next_action = self.off_policy_agent.select_action(state) # Yes, I'm using a private method, and may want to expose that again
+        next_action = self.select_action(state)
 
         self.previous_state = state
         self.previous_action = next_action
         return next_action
 
     def step(self, reward, state):
-        """
-        Advance 1 step in the world, and apply self.algorithm update.
-        Note: This is built for clarity, rather than efficiency. self.select_action(state) is actually pretty slow
-        because it evaluates all possible action_values, which is redundant with some of the operations in this method.
-        You could get significant speed-up (1.5-2x) if you optimized this.
+        next_action = self.select_action(state)
+        self.run_history.append((reward, self.previous_state, self.previous_action))
 
-        :param reward: Reward value for action taken
-        :param state: Current state
-        :return: None
-        """
-        if self.off_policy_agent is None:
-            next_action = self.select_action(state)
-        else:
-            next_action = self.off_policy_agent.select_action(state) # Yes, I'm using a private method, and may want to expose that again
-        previous_action_value = self.value_approximator.get_value(self.previous_state, self.previous_action)
-
-        # Update equation
-        if self.algorithm == TdControlAlgorithm.QLearner:
-            action_values = self.value_approximator.get_values(state)
-            optimal_next_value = action_values.max()
-            delta = reward + self.gamma * optimal_next_value - previous_action_value
-        elif self.algorithm == TdControlAlgorithm.Sarsa:
-            next_action_value = self.value_approximator.get_value(state, next_action)
-            delta = reward + self.gamma * next_action_value - previous_action_value
-        elif self.algorithm == TdControlAlgorithm.ExpectedSarsa:
-            # TODO: Did I mess this up...shouldn't policy be elementwise multiplied with all possible action_values?
-            action_values = self.value_approximator.get_values(state)
-            delta = reward + self.gamma * np.sum(self._get_policy(state) * action_values) - previous_action_value
-        else:
-            raise Exception("Invalid algorithm selected for TD Control Agent: %s. Select from TdControlAlgorithm enum.")
-
-        if(np.abs(delta*alpha) > 1):
-            print(state, " : ", delta*alpha)
-        self.value_approximator.update_weights(delta*alpha, self.previous_state, self.previous_action)
+        # if self.best_yet < state[0]: # DELETE
+        #     self.best_yet = state[0]
+        self.best_yet = np.max([self.best_yet, state[0]]) # DELETE
 
         self.previous_state = state
         self.previous_action = next_action
         return next_action
 
     def end(self, reward):
-        """
-        Very last step.
-        :param reward: Reward gained for action taken
-        :return: None
-        """
-        previous_action_value = self.value_approximator.get_value(self.previous_state, self.previous_action)
-        delta =  reward - previous_action_value
-        self.value_approximator.update_weights(delta, self.previous_state, self.previous_action)
+        if len(self.run_history) == 200:
+            reward += (self.best_yet-0.5)*100
+            # reward += self.previous_state[0]*100 - 200
+        self.run_history.append((reward, self.previous_state, self.previous_action))
+
+        g = 0
+        self.run_history.reverse()
+        i = 0
+        for r, state, action in self.run_history:
+            i += 1
+            # r, state, action = step
+            g = r + self.gamma * g
+            delta = self.alpha*(g - self.value_approximator.get_value(state, action)) #*grad
+            # print(i, state[0], g, self.value_approximator.get_value(state, action), delta)
+            self.value_approximator.update_weights(delta, state, action)
+        print("Reward: ", reward) # DELETE
 
     def message(self):
         pass
@@ -181,8 +164,9 @@ class TDControlAgent:
 
 
 
+
 if __name__ == "__main__":
-    from Agents import HumanAgent
+    from Agents import MonteCarloQAgent
     from FunctionApproximators import TileCodingStateActionApproximator
     import Trainer
     import gym
@@ -198,14 +182,15 @@ if __name__ == "__main__":
     # observations = [pos, vel]
     env_name = 'MountainCar-v0'
     state_boundaries = np.array([[-1.2, 0.5], [-0.07, 0.07]])
-    tile_resolution = np.array([32, 32])
+    tile_resolution = np.array([16, 16])
 
     env = gym.make(env_name)
+    print(dir(env.observation_space))
 
-    num_tilings = 32
+    num_tilings = 16
     epsilon = 0.01 # 0.01
-    gamma = 1  # discount factor
-    alpha = 1/(2**2) # learning rate: .1 to .5 Converges in a few ~1000 episodes down to about -100
+    gamma = .98  # discount factor
+    alpha = 1/(2**4) # learning rate
 
     approximator = TileCodingStateActionApproximator.TileCodingStateActionApproximator(
         env_name,
@@ -221,12 +206,10 @@ if __name__ == "__main__":
                   "epsilon": epsilon,
                   "gamma": gamma,
                   "alpha": alpha,
-                  "algorithm": TdControlAlgorithm.QLearner,
                   "state_action_value_approximator": approximator,
-                  # "off_policy_agent": HumanAgent.HumanAgent(),
                   }
 
-    agent = TDControlAgent(agent_info)
+    agent = MonteCarloQAgent.MonteCarloQAgent(agent_info)
     agent_file_path = os.getcwd() + r"/AgentMemory/Agent_%s_%s.p" % (agent.name, env_name)
     load_status = agent.load_agent_memory(agent_file_path)
 
@@ -236,23 +219,18 @@ if __name__ == "__main__":
     trainer = Trainer.Trainer(env, agent)
     if(load_status):
         trainer.load_run_history(trainer_file_path)
-    trainer.plot_value_function()
+
 
     ############### Define Run inputs and Run ###############
-    total_episodes = 50
+    total_episodes = 2000
     max_steps = 1000
-    render_interval = 0 # 0 is never
+    render_interval = 200 # 1000 # 0 is never
+    frame_delay = 0.01
 
-    off_policy_agent = agent_info.get("off_policy_agent", None)
-    if  off_policy_agent is not None and off_policy_agent.name == "Human":
-        # For human as the off-policy, I'm currently playing 'live', so I have to render, and limit episodes
-        total_episodes = 10
-        render_interval = 1
-
-
-    trainer.train_fixed_steps(total_episodes, max_steps, render_interval) # multiple runs for up to total_steps
+    trainer.train_fixed_steps(total_episodes, max_steps, render_interval, frame_delay) # multiple runs for up to total_steps
 
     ############### Save to file and plot progress ###############
     agent.save_agent_memory(agent_file_path)
     trainer.save_run_history(trainer_file_path)
-    Trainer.plot(agent, np.array(trainer.rewards) )
+    Trainer.plot(agent, np.array(trainer.rewards))
+    trainer.plot_value_function()
