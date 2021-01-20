@@ -1,5 +1,4 @@
 import numpy as np
-import RLHelpers
 import pickle
 import os
 
@@ -216,7 +215,7 @@ class SimpleNNAgent:
 
 
 if __name__ == "__main__":
-    from Agents import Optimizers
+    from ToolKit import Optimizers, RLHelpers
     import Trainer
     import gym
 

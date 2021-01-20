@@ -1,10 +1,10 @@
 from FunctionApproximators import AbstractFunctionApproximator
-from Encoders import Tiles3 as tc
+from ToolKit import Tiles3 as tc
 import numpy as np
 
 class TileCodingStateActionApproximator:
 
-    def __init__(self, state_boundaries, num_actions, tile_resolution, num_tilings=8):
+    def __init__(self, env_name, state_boundaries, num_actions, tile_resolution, num_tilings=8):
         """
         Initializes the Tile Coder.
         The tile encoder wraps tiles3.iht (index hash table). This enables easier generation of a tile encoding.
@@ -28,6 +28,7 @@ class TileCodingStateActionApproximator:
         assert(state_boundaries.shape[0] == tile_resolution.shape[0])
         assert np.all(state_boundaries.shape[1] == 2)
 
+        self.env_name = env_name
         self._dimensions = state_boundaries.shape[0] # 0: dims, 1: lower,upper
         self._state_boundaries = state_boundaries
         self._tile_resolution = tile_resolution
@@ -40,7 +41,7 @@ class TileCodingStateActionApproximator:
         self._iht = tc.IHT(self._total_possible_tiles)
 
         # Consider generalizes this in the future. This is optimistic for anything < 1.
-        self.weights = np.ones((self.num_actions, self._total_possible_tiles)) * 0.0 # I should eventually clean this up
+        self._weights = np.ones((self.num_actions, self._total_possible_tiles)) * 0.0 # TODO: pass in initial values
 
     def get_values(self, state):
         """
@@ -49,12 +50,12 @@ class TileCodingStateActionApproximator:
         :return:
         """
         features = self._get_active_tiles(state)
-        action_values = np.sum(self.weights[:, features], axis=1)
+        action_values = np.sum(self._weights[:, features], axis=1)
         return action_values
 
     def get_value(self, state, action):
         features = self._get_active_tiles(state)
-        action_value = np.sum(self.weights[action, features])
+        action_value = np.sum(self._weights[action, features])
         return action_value
 
     def get_gradient(self, state = None, action = None):
@@ -110,14 +111,15 @@ class TileCodingStateActionApproximator:
         :return:
         """
 
+        env_name = np.all(self.env_name == approximator.env_name)
         bound = np.all(self._state_boundaries == approximator._state_boundaries)
         res = np.all(self._tile_resolution == approximator._tile_resolution)
         num = self._num_tilings == approximator._num_tilings
-        return bound and res and num
+        return bound and res and num and env_name
 
     def update_weights(self, delta, state, action):
         activation = self._get_active_tiles(state)
-        self.weights[action][activation] = self.weights[action][activation] + delta/self._num_tilings
+        self._weights[action][activation] = self._weights[action][activation] + delta / self._num_tilings
 
 
 if __name__ == "__main__":

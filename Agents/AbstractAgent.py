@@ -3,8 +3,6 @@ Still getting my head around all the different agents. I fully expect to refacto
 I'm not sure what methods/hierarchy I'll be using yet.
 """
 
-import RLHelpers
-
 
 class AbstractAgent:
     def __init__(self, agent_info={}):

@@ -1,13 +1,17 @@
 """
 Still getting my head around all the different agents. I fully expect to refactor as I build different agents, but
 I'm not sure what methods/hierarchy I'll be using yet.
+
+TODO:
+ - Dyna Q and Dyna Q +
+ - Improve initialization
 """
 
 import numpy as np
 from enum import Enum
 
 # Relative imports
-import RLHelpers
+from ToolKit import RLHelpers
 import pickle
 import os
 
@@ -119,8 +123,6 @@ class TDControlAgent:
         else:
             raise Exception("Invalid algorithm selected for TD Control Agent: %s. Select from TdControlAlgorithm enum.")
 
-        if(np.abs(delta*alpha) > 1):
-            print(state, " : ", delta*alpha)
         self.value_approximator.update_weights(delta*alpha, self.previous_state, self.previous_action)
 
         self.previous_state = state
@@ -182,7 +184,6 @@ class TDControlAgent:
 
 
 if __name__ == "__main__":
-    from Agents import HumanAgent
     from FunctionApproximators import TileCodingStateActionApproximator
     import Trainer
     import gym
@@ -205,7 +206,7 @@ if __name__ == "__main__":
     num_tilings = 32
     epsilon = 0.01 # 0.01
     gamma = 1  # discount factor
-    alpha = 1/(2**2) # learning rate: .1 to .5 Converges in a few ~1000 episodes down to about -100
+    alpha = 1/(2**1) # learning rate: .1 to .5 Converges in a few ~1000 episodes down to about -100
 
     approximator = TileCodingStateActionApproximator.TileCodingStateActionApproximator(
         env_name,
@@ -239,7 +240,7 @@ if __name__ == "__main__":
     trainer.plot_value_function()
 
     ############### Define Run inputs and Run ###############
-    total_episodes = 50
+    total_episodes = 300
     max_steps = 1000
     render_interval = 0 # 0 is never
 
@@ -248,7 +249,6 @@ if __name__ == "__main__":
         # For human as the off-policy, I'm currently playing 'live', so I have to render, and limit episodes
         total_episodes = 10
         render_interval = 1
-
 
     trainer.train_fixed_steps(total_episodes, max_steps, render_interval) # multiple runs for up to total_steps
 
