@@ -115,8 +115,8 @@ class MonteCarloQAgent:
             i += 1
             # r, state, action = step
             g = r + self.gamma * g
-            delta = self.alpha*(g - self.value_approximator.get_value(state, action)) #*grad
-            # print(i, state[0], g, self.value_approximator.get_value(state, action), delta)
+            delta = self.alpha*(g - self.value_approximator.get_value(state, action))
+            # Error function and gradient and bundled into the approximator
             self.value_approximator.update_weights(delta, state, action)
         print("Reward: ", reward) # DELETE
 

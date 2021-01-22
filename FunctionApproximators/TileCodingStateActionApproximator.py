@@ -58,25 +58,33 @@ class TileCodingStateActionApproximator:
         action_value = np.sum(self._weights[action, features])
         return action_value
 
-    def get_gradient(self, state = None, action = None):
+    def _get_gradient(self, state = None, action = None):
         """
-        Strictly speaking this should be a vector of 1's, np.ones((features))
-        Tiling effectively turns the forward function into: [w1,w2,w3,...wn]*[f1,f2,f3,...,fn]
-          Where W = [w1,w2,w3,...wn] is the weight vector, and
-          F = [f1,f2,f3,...,fn] is the feature vector (1 if tile is active, 0 if tile is not active), and
-          the multiplication is elementwise.
-        Therefore, given state F, the gradient dW/dv = d [w1,w2,w3,...wn] / dv = [1,1,1,...,1],
-        or a vector of 1's of length n.
-        However, this representation would have lots of sparse vectors, so this class manages all the multiplication
-        with the lookup in the IHT class. Therefore, we don't use the sparse vector. Instead we just use the dense
-        representation, an array of 1's representing the dense vector of tiles. Granted, this is absurdly simple in
-        this context, because the indexes are inferred, so it's literally always returning the same thing.
-        Even the length does not change, as y design, tiles always have the same number active (1 from each tiling),
-        so this is np.ones((self._num_tilings))
+        Gets the dense representation of the gradient, corresponding to the [action, state_activations].
+        Each of these feature vectors are just
+        V_hat = W*F = [w1,w2,w3,...wn]*[f1,f2,f3,...,fn] = [w1*f1, w2*f1, w3*f3...,wn*fn], where:
+            W = [w1,w2,w3,...wn] is the weight vector, and
+            F = [f1,f2,f3,...,fn] is the feature vector of [action, tile activations] (1 if tile is active and taking
+            the corresponding action, 0 for everything else]
+            active), and
+            Multiplication is element-wise.
+        Therefore, given feature activation vector F, the gradient dW/dV = d [w1,w2,w3,...wn] / dv = [0,1,0,...,0],
+        or a sparse vector of most '0's, with '1's in key activated locations. This vector has the same dimensions as w.
+
+        If we were using the full representation described just above, then the code would look like this:
+            full_grad = np.zeros((action,self._total_possible_tiles))
+            activations = self._get_active_tiles(state)
+            full_grad[action, activations] = np.ones((self._num_tilings))
+            return full_grad
+
+        However, we waste tons of cpu cycles on operations that are all 0. So we just run the gradient for the
+        activated elements. As mentioned, these are all 1's. And in fact we know that the there are self._num_tilings
+        total activations, so that is the vector length. Thus, we just return a vector of '1's. This entire class works
+        on this assumption, so the calling members know that they are really getting grad=full_grad[action][activation]
 
         :param state: Only included for consistency with interface.
         :param action: Only included for consistency with interface.
-        :return: Gradient (which is just 1)
+        :return: Dense gradient. grad = full_grad[action][activation]. Read full comment block for details
         """
         return np.ones((self._num_tilings)) # 1
 
@@ -119,8 +127,10 @@ class TileCodingStateActionApproximator:
 
     def update_weights(self, delta, state, action):
         activation = self._get_active_tiles(state)
-        self._weights[action][activation] = self._weights[action][activation] + delta / self._num_tilings
-
+        # The gradient is just a vector of '1's for tile-coders using mse, so it's just wasting cpu cycles; however,
+        # this project is about clarity, not efficiency. Also, if we were to generalize to other error functions,
+        # this formula would still be correct
+        self._weights[action][activation] = (self._weights[action][activation] + delta / self._num_tilings) * self._get_gradient(state, action)
 
 if __name__ == "__main__":
     pass
