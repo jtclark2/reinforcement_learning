@@ -35,16 +35,26 @@ class TDControlAgent:
 
         # Encoding (this has been encapsulated in it's own class, for dependency inversion)
         self.value_approximator = agent_info["state_action_value_approximator"]
+        # None is perfect for most simulations - replace with model for slower environments, or real-world (robotics)
+        self.model = agent_info.get("model", None)
 
         # Hyperparameters
         self.epsilon = agent_info.get("epsilon", 0.01) # In case of epsilon greedy exploration
         self.gamma = agent_info.get("gamma", 1) # discount factor
         self.alpha = agent_info["alpha"] # step size of learning rate
 
-        self.off_policy_agent = agent_info.get("off_policy_agent", None)
+
         self.algorithm = agent_info.get("algorithm", TdControlAlgorithm.QLearner)
         assert isinstance(self.algorithm, TdControlAlgorithm)
         self.name = self.algorithm.name
+        self.off_policy_agent = agent_info.get("off_policy_agent", None)
+        # This can work with SARSA and Expected SARSA, but then you really should use importance sampling, which
+        # is not a priority for this project, because:
+        #   1) The agent interface I use for off-policy action selection does not expose the policy directly.
+        #   We could build up an model for the policy, but that is far more effort than this application merits.
+        #   2) This project is intended to practice practical skills, and that's neither a concept that i need to
+        #   solidify, nor a frequently used/practical approach to gain experience implementing.
+        assert self.algorithm == TdControlAlgorithm.QLearner
 
     def reset(self, agent_info={}):
         """
@@ -102,12 +112,43 @@ class TDControlAgent:
         :param state: Current state
         :return: None
         """
+
+        # Select next action
         if self.off_policy_agent is None:
             next_action = self.select_action(state)
         else:
             next_action = self.off_policy_agent.select_action(state) # Yes, I'm using a private method, and may want to expose that again
-        previous_action_value = self.value_approximator.get_value(self.previous_state, self.previous_action)
 
+        self._update_q(self.previous_state, self.previous_action, reward, state, next_action)
+
+        if self.model is not None:
+            self.model.record_transition(self.previous_state, self.previous_action, reward, state)
+            model.simulate(self._update_q) # learn by simulating previous experience
+
+        self.previous_state = state
+        self.previous_action = next_action
+        return next_action
+
+    def _update_q(self, previous_state, previous_action, reward, state, next_action):
+        """
+        Update Q function approximation based on (SARSA, Expected SARSA, Q Learning), using TD update.
+        Based on a previous_state S, and previous_action A, the environment updates, creating reward R. The environment
+        then transitions to state S'. I think of this as the current state, because as far as the environment is
+        concerned, that's what it is. Sometimes the literature (confusingly) calls this next_state, to differentiate
+        it from the previous one.
+        This is where the algorithms diverge.
+            - Sarsa selects the next_action, A', which is used to estimate the new state-action-value, Q(S',A')
+            - Q Learning considers all possible next actions, and using the optimal one (without needing to decide on
+                the next action yet.
+            -  Expected Sarsa averages over all possible actions in the ratio the policy dictates.
+        :param next_action: The next action selected (but not yet taken). Only needed for SARSA.
+        :param reward: The reward gained based on the previous environment step.
+        :param state: The state the environment has just transitioned into. This is technically next_state, since Q updates technically happen after action selection, but
+        before arrival to the next state. this is technically the next state that we we will transition to.
+
+        :return:
+        """
+        previous_action_value = self.value_approximator.get_value(previous_state, previous_action)
         # Update equation
         if self.algorithm == TdControlAlgorithm.QLearner:
             action_values = self.value_approximator.get_values(state)
@@ -117,21 +158,16 @@ class TDControlAgent:
             next_action_value = self.value_approximator.get_value(state, next_action)
             delta = reward + self.gamma * next_action_value - previous_action_value
         elif self.algorithm == TdControlAlgorithm.ExpectedSarsa:
-            # TODO: Did I mess this up...shouldn't policy be elementwise multiplied with all possible action_values?
             action_values = self.value_approximator.get_values(state)
             delta = reward + self.gamma * np.sum(self._get_policy(state) * action_values) - previous_action_value
         else:
             raise Exception("Invalid algorithm selected for TD Control Agent: %s. Select from TdControlAlgorithm enum.")
-
-        self.value_approximator.update_weights(delta*alpha, self.previous_state, self.previous_action)
-
-        self.previous_state = state
-        self.previous_action = next_action
-        return next_action
+        self.value_approximator.update_weights(delta * self.alpha, previous_state, previous_action)
 
     def end(self, reward):
         """
         Very last step.
+        Note that this is very similar to _update_q, but a little simpler, since state and action are not needed.
         :param reward: Reward gained for action taken
         :return: None
         """
@@ -185,28 +221,32 @@ class TDControlAgent:
 
 if __name__ == "__main__":
     from FunctionApproximators import TileCodingStateActionApproximator
+    from Models import DeterministicModel
     import Trainer
     import gym
 
     ############### Environment Setup (and configuration of agent for env) ###############
 
-    # # Specific to CartPole-v1
-    # # ??? pos, vel, ang_pos, ang_vel ???
-    # state_limits = np.array([[-2.5, 2.5], [-2.5, 2.5], [-0.3, 0.3], [-1, 1]])
-    # feature_resolution = np.array([16,16,16,16])
+    # Specific to CartPole-v1
+    # ??? pos, vel, ang_pos, ang_vel ???
+    # really favors more exploration epsilon >= 0.1...lower epsilon takes forever to learn, and higher never stabilizes
+    # alpha can be as high as 1 and stay fairly stable, though there is no need to push it
+    env_name = 'CartPole-v1'
+    state_boundaries = np.array([[-2.5, 2.5], [-2.5, 2.5], [-0.3, 0.3], [-1, 1]])
+    tile_resolution = np.array([16,16,16,16])
 
-    # ---Specific to MountainCar-v0---
-    # observations = [pos, vel]
-    env_name = 'MountainCar-v0'
-    state_boundaries = np.array([[-1.2, 0.5], [-0.07, 0.07]])
-    tile_resolution = np.array([32, 32])
+    # # ---Specific to MountainCar-v0---
+    # # observations = [pos, vel]
+    # env_name = 'MountainCar-v0'
+    # state_boundaries = np.array([[-1.2, 0.5], [-0.07, 0.07]])
+    # tile_resolution = np.array([32, 32])
 
     env = gym.make(env_name)
 
     num_tilings = 32
-    epsilon = 0.01 # 0.01
+    epsilon = 0.1 # 0.01
     gamma = 1  # discount factor
-    alpha = 1/(2**1) # learning rate: .1 to .5 Converges in a few ~1000 episodes down to about -100
+    alpha = 1/(2**0) # learning rate: .1 to .5 Converges in a few ~1000 episodes down to about -100
 
     approximator = TileCodingStateActionApproximator.TileCodingStateActionApproximator(
         env_name,
@@ -214,6 +254,8 @@ if __name__ == "__main__":
         env.action_space.n,
         tile_resolution = tile_resolution,
         num_tilings = num_tilings)
+
+    model = DeterministicModel.DeterministicModel(5)
 
 
     ############### Create And Configure Agent ###############
@@ -225,6 +267,7 @@ if __name__ == "__main__":
                   "algorithm": TdControlAlgorithm.QLearner,
                   "state_action_value_approximator": approximator,
                   # "off_policy_agent": HumanAgent.HumanAgent(),
+                  "model": model
                   }
 
     agent = TDControlAgent(agent_info)
@@ -237,10 +280,9 @@ if __name__ == "__main__":
     trainer = Trainer.Trainer(env, agent)
     if(load_status):
         trainer.load_run_history(trainer_file_path)
-    trainer.plot_value_function()
 
     ############### Define Run inputs and Run ###############
-    total_episodes = 300
+    total_episodes = 100
     max_steps = 1000
     render_interval = 0 # 0 is never
 
@@ -256,3 +298,5 @@ if __name__ == "__main__":
     agent.save_agent_memory(agent_file_path)
     trainer.save_run_history(trainer_file_path)
     Trainer.plot(agent, np.array(trainer.rewards) )
+    # TODO: extend plot_value_function to allow direct input, currently assumes observation space is 2D (eg: pos, vel)
+    # trainer.plot_value_function()
