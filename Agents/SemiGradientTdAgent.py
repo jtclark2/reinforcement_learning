@@ -20,7 +20,7 @@ class TdControlAlgorithm(Enum):
     Sarsa = 2
     ExpectedSarsa = 3
 
-class TDControlAgent:
+class SemiGradientTdAgent:
     """
     This agent implements QLearning and SARSA.
     """
@@ -54,11 +54,11 @@ class TDControlAgent:
         #   We could build up an model for the policy, but that is far more effort than this application merits.
         #   2) This project is intended to practice practical skills, and that's neither a concept that i need to
         #   solidify, nor a frequently used/practical approach to gain experience implementing.
-        assert self.algorithm == TdControlAlgorithm.QLearner
+        # assert self.algorithm == TdControlAlgorithm.QLearner
 
     def reset(self, agent_info={}):
         """
-        Setup for the agent called when the experiment first starts.
+        Setup for the agent at beginning of episode.
         :return: None
         """
         pass
@@ -164,6 +164,18 @@ class TDControlAgent:
             raise Exception("Invalid algorithm selected for TD Control Agent: %s. Select from TdControlAlgorithm enum.")
         self.value_approximator.update_weights(delta * self.alpha, previous_state, previous_action)
 
+        # EXPERIMENTAL correction to semi-gradient descent, making it true gradient descent
+        # It seems to work - still converges, and matches Monte Carlo better this way. That said, neither this form
+        # or the MC form match my expectations. Book has a linear plot, which this is not.
+        # More investigation would be needed.
+        # See further discussion here:
+        # https://stats.stackexchange.com/questions/347295/why-semi-gradient-is-used-instead-of-the-true-gradient-in-q-learning
+        FULL_GRADIENT_EXPERIMENT = False
+        if FULL_GRADIENT_EXPERIMENT and next_action is None:
+            next_action = self.select_action(state)
+        self.value_approximator.update_weights(-delta * self.alpha, state, next_action)
+        # End of Experimental
+
     def end(self, reward):
         """
         Very last step.
@@ -227,26 +239,44 @@ if __name__ == "__main__":
 
     ############### Environment Setup (and configuration of agent for env) ###############
 
+
     # Specific to CartPole-v1
     # ??? pos, vel, ang_pos, ang_vel ???
     # really favors more exploration epsilon >= 0.1...lower epsilon takes forever to learn, and higher never stabilizes
     # alpha can be as high as 1 and stay fairly stable, though there is no need to push it
-    env_name = 'CartPole-v1'
-    state_boundaries = np.array([[-2.5, 2.5], [-2.5, 2.5], [-0.3, 0.3], [-1, 1]])
-    tile_resolution = np.array([16,16,16,16])
+    # env_name = 'CartPole-v1'
+    # state_boundaries = np.array([[-2.5, 2.5], [-2.5, 2.5], [-0.3, 0.3], [-1, 1]])
+    # tile_resolution = np.array([16,16,16,16])
+    # num_tilings = 32
+    # env = gym.make(env_name)
+    # epsilon = 0.1 # 0.01
+    # gamma = 1  # discount factor
+    # alpha = 1/(2**1) # learning rate: .1 to .5 Converges in a few ~1000 episodes down to about -100
 
     # # ---Specific to MountainCar-v0---
     # # observations = [pos, vel]
     # env_name = 'MountainCar-v0'
     # state_boundaries = np.array([[-1.2, 0.5], [-0.07, 0.07]])
     # tile_resolution = np.array([32, 32])
+    # num_tilings = 32
+    # env = gym.make(env_name)
+    # epsilon = 0.1 # 0.01
+    # gamma = 1  # discount factor
+    # alpha = 1/(2**1) # learning rate: .1 to .5 Converges in a few ~1000 episodes down to about -100
+    # model = DeterministicModel.DeterministicModel(5)
 
-    env = gym.make(env_name)
 
-    num_tilings = 32
-    epsilon = 0.1 # 0.01
+    # Specific to RandomWalk (a custom pseudo-env I created)
+    from Environments import RandomWalkEnv
+    env_name = 'RandomWalk_v0'
+    state_boundaries = np.array([[0,1000]])
+    tile_resolution = np.array([10])
+    env = RandomWalkEnv.RandomWalkEnv()
+    num_tilings = 1
+    epsilon = 1 # 1 # 0.01
     gamma = 1  # discount factor
-    alpha = 1/(2**0) # learning rate: .1 to .5 Converges in a few ~1000 episodes down to about -100
+    alpha = 1/(2**5) # learning rate: .1 to .5 Converges in a few ~1000 episodes down to about -100
+    model =  None
 
     approximator = TileCodingStateActionApproximator.TileCodingStateActionApproximator(
         env_name,
@@ -255,7 +285,7 @@ if __name__ == "__main__":
         tile_resolution = tile_resolution,
         num_tilings = num_tilings)
 
-    model = DeterministicModel.DeterministicModel(5)
+    model = None # DeterministicModel.DeterministicModel(5)
 
 
     ############### Create And Configure Agent ###############
@@ -264,13 +294,13 @@ if __name__ == "__main__":
                   "epsilon": epsilon,
                   "gamma": gamma,
                   "alpha": alpha,
-                  "algorithm": TdControlAlgorithm.QLearner,
+                  "algorithm": TdControlAlgorithm.Sarsa,
                   "state_action_value_approximator": approximator,
                   # "off_policy_agent": HumanAgent.HumanAgent(),
                   "model": model
                   }
 
-    agent = TDControlAgent(agent_info)
+    agent = SemiGradientTdAgent(agent_info)
     agent_file_path = os.getcwd() + r"/AgentMemory/Agent_%s_%s.p" % (agent.name, env_name)
     load_status = agent.load_agent_memory(agent_file_path)
 
@@ -282,7 +312,7 @@ if __name__ == "__main__":
         trainer.load_run_history(trainer_file_path)
 
     ############### Define Run inputs and Run ###############
-    total_episodes = 100
+    total_episodes = 1000
     max_steps = 1000
     render_interval = 0 # 0 is never
 
@@ -292,7 +322,7 @@ if __name__ == "__main__":
         total_episodes = 10
         render_interval = 1
 
-    trainer.train_fixed_steps(total_episodes, max_steps, render_interval) # multiple runs for up to total_steps
+    trainer.run_multiple_episodes(total_episodes, max_steps, render_interval) # multiple runs for up to total_steps
 
     ############### Save to file and plot progress ###############
     agent.save_agent_memory(agent_file_path)
@@ -300,3 +330,10 @@ if __name__ == "__main__":
     Trainer.plot(agent, np.array(trainer.rewards) )
     # TODO: extend plot_value_function to allow direct input, currently assumes observation space is 2D (eg: pos, vel)
     # trainer.plot_value_function()
+
+    import Trainer
+    if env_name == 'RandomWalk_v0':
+        x = [x for x in range(1000)]
+        y_estimate = [np.average(agent.value_approximator.get_values(np.array([x]))) for x in range(1000)]
+        y_actual = [ (x-500)/500 for x in range(1000)]
+        Trainer.multiline_plot(x, y_estimate, y_actual)

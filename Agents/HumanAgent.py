@@ -145,4 +145,4 @@ if __name__ == "__main__":
     total_episodes = 1
     max_steps = 1000
     render_interval = 1 # # I better be able to see if I'm playing
-    trainer.train_fixed_steps(total_episodes, max_steps, render_interval) # multiple runs for up to total_steps
+    trainer.run_multiple_episodes(total_episodes, max_steps, render_interval) # multiple runs for up to total_steps

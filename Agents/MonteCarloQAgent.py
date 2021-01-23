@@ -61,7 +61,9 @@ class MonteCarloQAgent:
         :return: None
         """
         self.run_history = []
-        self.best_yet = -10000000 # DELETE
+        # TODO: Bits of reward shaping are in here. Ultimately, I want to allow this, but I definitely don't want it
+        # hardcoded in like this. This makes the algorithm very specific to certain problems
+        # self.best_yet = -10000000 # DELETE - Reward Shaping
 
     def select_action(self, state):
         """
@@ -81,7 +83,7 @@ class MonteCarloQAgent:
                 greedy_choices = RLHelpers.all_argmax(action_values)  # act greedy
                 chosen_action = np.random.choice(greedy_choices)
 
-        return chosen_action # , action_values[chosen_action]
+        return chosen_action
 
     def start(self, state):
         next_action = self.select_action(state)
@@ -94,18 +96,18 @@ class MonteCarloQAgent:
         next_action = self.select_action(state)
         self.run_history.append((reward, self.previous_state, self.previous_action))
 
-        # if self.best_yet < state[0]: # DELETE
-        #     self.best_yet = state[0]
-        self.best_yet = np.max([self.best_yet, state[0]]) # DELETE
+        # self.best_yet = np.max([self.best_yet, state[0]]) # DELETE - Reward Shaping
 
         self.previous_state = state
         self.previous_action = next_action
         return next_action
 
     def end(self, reward):
-        if len(self.run_history) == 200:
-            reward += (self.best_yet-0.5)*100
-            # reward += self.previous_state[0]*100 - 200
+        # DELETE - Reward shaping - this is an example of reward shaping. It's not great, because it's specific to a single
+        # problem (mountain car in this case).
+        # if len(self.run_history) == 200:
+        #     reward += (self.best_yet-0.5)*100
+        #     # reward += self.previous_state[0]*100 - 200
         self.run_history.append((reward, self.previous_state, self.previous_action))
 
         g = 0
@@ -118,7 +120,6 @@ class MonteCarloQAgent:
             delta = self.alpha*(g - self.value_approximator.get_value(state, action))
             # Error function and gradient and bundled into the approximator
             self.value_approximator.update_weights(delta, state, action)
-        print("Reward: ", reward) # DELETE
 
     def message(self):
         pass
@@ -169,7 +170,6 @@ if __name__ == "__main__":
     from Agents import MonteCarloQAgent
     from FunctionApproximators import TileCodingStateActionApproximator
     import Trainer
-    import gym
 
     ############### Environment Setup (and configuration of agent for env) ###############
 
@@ -178,19 +178,29 @@ if __name__ == "__main__":
     # state_limits = np.array([[-2.5, 2.5], [-2.5, 2.5], [-0.3, 0.3], [-1, 1]])
     # feature_resolution = np.array([16,16,16,16])
 
-    # ---Specific to MountainCar-v0---
-    # observations = [pos, vel]
-    env_name = 'MountainCar-v0'
-    state_boundaries = np.array([[-1.2, 0.5], [-0.07, 0.07]])
-    tile_resolution = np.array([16, 16])
+    # # ---Specific to MountainCar-v0---
+    # # observations = [pos, vel]
+    # env_name = 'MountainCar-v0'
+    # state_boundaries = np.array([[-1.2, 0.5], [-0.07, 0.07]])
+    # tile_resolution = np.array([16, 16])
+    # env = gym.make(env_name)
+    # num_tilings = 16
+    # epsilon = 0.01 # 0.01
+    # gamma = .98  # discount factor
+    # alpha = 1/(2**4) # learning rate
 
-    env = gym.make(env_name)
-    print(dir(env.observation_space))
+    # Specific to RandomWalk (a custom pseudo-env I created)
+    from Environments import RandomWalkEnv
+    env_name = 'RandomWalk_v0'
+    state_boundaries = np.array([[0,1000]])
+    tile_resolution = np.array([10])
+    env = RandomWalkEnv.RandomWalkEnv()
+    num_tilings = 1
+    epsilon = 1 # 1 # 0.01
+    gamma = 1  # discount factor
+    alpha = 1/(2**5) # learning rate: .1 to .5 Converges in a few ~1000 episodes down to about -100
+    model =  None
 
-    num_tilings = 16
-    epsilon = 0.01 # 0.01
-    gamma = .98  # discount factor
-    alpha = 1/(2**4) # learning rate
 
     approximator = TileCodingStateActionApproximator.TileCodingStateActionApproximator(
         env_name,
@@ -222,15 +232,22 @@ if __name__ == "__main__":
 
 
     ############### Define Run inputs and Run ###############
-    total_episodes = 2000
+    total_episodes = 1000
     max_steps = 1000
-    render_interval = 200 # 1000 # 0 is never
+    render_interval = 0 # 0 is never
     frame_delay = 0.01
 
-    trainer.train_fixed_steps(total_episodes, max_steps, render_interval, frame_delay) # multiple runs for up to total_steps
+    trainer.run_multiple_episodes(total_episodes, max_steps, render_interval, frame_delay) # multiple runs for up to total_steps
 
     ############### Save to file and plot progress ###############
     agent.save_agent_memory(agent_file_path)
     trainer.save_run_history(trainer_file_path)
     Trainer.plot(agent, np.array(trainer.rewards))
-    trainer.plot_value_function()
+    # trainer.plot_value_function()
+
+    import Trainer
+    if env_name == 'RandomWalk_v0':
+        x = [x for x in range(1000)]
+        y_estimate = [np.average(agent.value_approximator.get_values(np.array([x]))) for x in range(1000)]
+        y_actual = [ (x-500)/500 for x in range(1000)]
+        Trainer.multiline_plot(x, y_estimate, y_actual)

@@ -259,7 +259,7 @@ if __name__ == "__main__":
     total_episodes = 200
     max_steps = 1000
     render_interval = 100 # 0 is never
-    trainer.train_fixed_steps(total_episodes, max_steps, render_interval) # multiple runs for up to total_steps
+    trainer.run_multiple_episodes(total_episodes, max_steps, render_interval) # multiple runs for up to total_steps
 
     ############### Save to file and plot progress ###############
     agent.save_agent_memory(env_name)

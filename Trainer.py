@@ -14,7 +14,7 @@ class Trainer():
         self.observation = env.reset()
         self.agent = agent
 
-    def train_fixed_steps(self, total_episodes, max_steps_per_run, render_interval=0, frame_delay=0.05):
+    def run_multiple_episodes(self, total_episodes, max_steps_per_run, render_interval=0, frame_delay=0.05):
         """
         This may need to rethinking with regard to termination condition...we may want more flexibility than a fixed
         number of steps in more advanced situations.
@@ -31,7 +31,7 @@ class Trainer():
         average_reward = None
         render = render_interval
         while(episode_count < total_episodes):
-            steps, reward = self.run_env(max_steps_per_run, render, frame_delay)
+            steps, reward = self.run_episode(max_steps_per_run, render, frame_delay)
             self.rewards.append(reward)
             greatest_reward = max(greatest_reward, reward)
             learning_rate = 1/100
@@ -52,7 +52,8 @@ class Trainer():
             #     self.agent.save_agent_memory(agent_file_path)
             #     self.save_run_history(history_file_path)
 
-    def run_env(self, max_steps, render, frame_delay):
+
+    def run_episode(self, max_steps, render, frame_delay):
         """
         Initializes env, and runs until done.
 
@@ -64,6 +65,7 @@ class Trainer():
 
         :return: Tuple: (Time taken, total reward achieved)
         """
+
         self.observation = self.env.reset()
         self.agent.reset()
         total_reward = 0
@@ -73,14 +75,14 @@ class Trainer():
                 time.sleep(frame_delay)
                 self.env.render()
             self.observation, reward, done, info = self.env.step(action)  # take a random action
-            # print("Observation: ", self.observationa)
-            action = self.agent.step(reward, self.observation)
+            # print("Observation: ", self.observation)
             total_reward += reward
 
             if (done is True):
                 self.agent.end(reward)
                 break
-        step +=1
+            else:
+                action = self.agent.step(reward, self.observation)
 
         self.env.close()
         return step, total_reward
@@ -100,6 +102,7 @@ class Trainer():
             print("Warning: Unable to load training_history. Program will proceed without loading.")
             time.sleep(2)
 
+    #TODO: I don't really think plotting tools belong here...not quite sure how to structure yet...
     def plot_value_function(self, resolution=50, type = "action_value"):
 
         min1 = self.agent.value_approximator._state_boundaries[0][0]
@@ -127,6 +130,21 @@ class Trainer():
         ax.plot_wireframe(variable1, variable2, value)
         plt.show()
 
+def multiline_plot(x, y1, y2):
+    # x1 = [point[0] for point in line1]
+    # y1 = [point[1] for point in line1]
+    # x2 = [point[0] for point in line2]
+    # y2 = [point[1] for point in line2]
+    plt.plot(x, y1, 'r', x, y2, 'b')
+    plt.show()
+
+def simple_1D_plot(values):
+    plt.figure(figsize=(12, 8), dpi=80, facecolor='w', edgecolor='k')
+    plt.plot(values)
+    plt.xlabel("Values")
+    plt.ylabel("Index")
+    plt.yscale("linear")
+    plt.show()
 
 
 def plot(agent, results, smoothing = 100):
@@ -176,7 +194,9 @@ if __name__ == "__main__":
         def load_agent_memory(self, load_path):
             return True
 
-
+    # TODO: I want to clean up the setup for specific environments...each algorithm needs different setup depending on
+    # problem. The differences are just hyperparameters, which is a reasonable level of adjustment. I just need
+    # a slightly more organized/encapsulated way to set them up.
     ############### Environment Setup (and configuration of agent for env) ###############
     env_name = 'MountainCar-v0'
 
@@ -201,7 +221,7 @@ if __name__ == "__main__":
     max_steps = 1000 # turns out most gym.env environments auto-stop (really early in fact)
     render_interval = 1 # 0 is never
     frame_delay = 0.2
-    trainer.train_fixed_steps(total_episodes, max_steps, render_interval, frame_delay) # multiple runs for up to total_steps
+    trainer.run_multiple_episodes(total_episodes, max_steps, render_interval, frame_delay) # multiple runs for up to total_steps
 
     # ############### Save to file and plot progress ###############
     agent.save_agent_memory(agent_file_path)
