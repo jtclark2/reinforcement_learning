@@ -62,14 +62,21 @@ class TileCodingStateActionApproximator:
         """
         Gets the dense representation of the gradient, corresponding to the [action, state_activations].
         Each of these feature vectors are just
-        V_hat = W*F = [w1,w2,w3,...wn]*[f1,f2,f3,...,fn] = [w1*f1, w2*f1, w3*f3...,wn*fn], where:
+            V_hat = W*X = [w1,w2,w3,...wn]*[x1,x2,x3,...,xn] = [w1*x1, w2*x1, w3*x3...,wn*xn], where:
             W = [w1,w2,w3,...wn] is the weight vector, and
-            F = [f1,f2,f3,...,fn] is the feature vector of [action, tile activations] (1 if tile is active and taking
+            X = [x1,x2,x3,...,xn] is the feature vector of [action, tile activations] (1 if tile is active and taking
             the corresponding action, 0 for everything else]
             active), and
-            Multiplication is element-wise.
-        Therefore, given feature activation vector F, the gradient dW/dV = d [w1,w2,w3,...wn] / dv = [0,1,0,...,0],
-        or a sparse vector of most '0's, with '1's in key activated locations. This vector has the same dimensions as w.
+            Multiplication is element-wise
+        Therefore, given feature activation vector F, the gradient:
+            dW/dV = d [w1,w2,w3,...wn] / dv = [x1,x2,x3,...,xn] = [0,1,0,...,0]
+        In general, for all linear functions, we would just say the gradient is X = [x1,x2,x3,...,xn]. For tile coding,
+        the features vectors are just sparse vectors, where if the state is in a tile, x = 1, not in the tile x = 0.
+        That leaves a sparse vector of most '0's, with '1's just in the activated locations.
+
+        W has the same dimensions grad = dW/dV has the same dimensions as W, a vector of length =
+        self.num_actions * self._total_possible_tiles. However, for convenience, in this implementation, purely for
+        convenience, W is represented as matrix [self.num_actions, self._total_possible_tiles]
 
         If we were using the full representation described just above, then the code would look like this:
             full_grad = np.zeros((action,self._total_possible_tiles))
@@ -77,7 +84,7 @@ class TileCodingStateActionApproximator:
             full_grad[action, activations] = np.ones((self._num_tilings))
             return full_grad
 
-        However, we waste tons of cpu cycles on operations that are all 0. So we just run the gradient for the
+        However, we would waste tons of cpu cycles on operations that are all 0. So we just run the gradient for the
         activated elements. As mentioned, these are all 1's. And in fact we know that the there are self._num_tilings
         total activations, so that is the vector length. Thus, we just return a vector of '1's. This entire class works
         on this assumption, so the calling members know that they are really getting grad=full_grad[action][activation]
@@ -126,11 +133,24 @@ class TileCodingStateActionApproximator:
         return bound and res and num and env_name
 
     def update_weights(self, delta, state, action):
+        """
+        Handles updating the weights that estimate the Value function. Z
+        :param delta:
+        :param state:
+        :param action:
+        :return:
+        """
         activation = self._get_active_tiles(state)
         # The gradient is just a vector of '1's for tile-coders using mse, so it's just wasting cpu cycles; however,
         # this project is about clarity, not efficiency. Also, if we were to generalize to other error functions,
         # this formula would still be correct
-        self._weights[action][activation] = (self._weights[action][activation] + delta / self._num_tilings) * self._get_gradient(state, action)
+        self._weights[action][activation] = self._weights[action][activation] + (delta / self._num_tilings) * self._get_gradient(state, action)
+
+        # print(self._weights[action][activation])
+        x = self._weights[action][activation]
+        if(x > 1):
+            x
+
 
 if __name__ == "__main__":
     pass
