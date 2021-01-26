@@ -146,11 +146,6 @@ class TileCodingStateActionApproximator:
         # this formula would still be correct
         self._weights[action][activation] = self._weights[action][activation] + (delta / self._num_tilings) * self._get_gradient(state, action)
 
-        # print(self._weights[action][activation])
-        x = self._weights[action][activation]
-        if(x > 1):
-            x
-
 
 if __name__ == "__main__":
     pass

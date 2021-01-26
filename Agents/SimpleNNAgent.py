@@ -17,6 +17,8 @@ class SimpleNNAgent:
 
     #################### Initialization ####################
     def __init__(self, agent_info={}):
+        print("This class is still in progress. I think it runs, but something is still wrong with it.")
+        raise NotImplementedError
         self.name = "SimpleNNAgent"
 
         # Set attributes according to agent_info
@@ -216,7 +218,7 @@ class SimpleNNAgent:
 
 if __name__ == "__main__":
     from ToolKit import Optimizers, RLHelpers
-    import Trainer
+    from Trainers import GymTrainer
     import gym
 
     ############### Environment Setup (and configuration of agent for env) ###############
@@ -251,7 +253,7 @@ if __name__ == "__main__":
     load_status = agent.load_agent_memory(env_name)
 
     ############### Trainer Setup (load run history) ###############
-    trainer = Trainer.Trainer(env, agent)
+    trainer = GymTrainer.GymTrainer(env, agent)
     if(load_status):
         trainer.load_run_history(env_name)
 
@@ -264,4 +266,4 @@ if __name__ == "__main__":
     ############### Save to file and plot progress ###############
     agent.save_agent_memory(env_name)
     trainer.save_run_history(env_name)
-    Trainer.plot(agent, np.array(trainer.rewards) )
+    GymTrainer.plot(agent, np.array(trainer.rewards))

@@ -61,9 +61,6 @@ class MonteCarloQAgent:
         :return: None
         """
         self.run_history = []
-        # TODO: Bits of reward shaping are in here. Ultimately, I want to allow this, but I definitely don't want it
-        # hardcoded in like this. This makes the algorithm very specific to certain problems
-        # self.best_yet = -10000000 # DELETE - Reward Shaping
 
     def select_action(self, state):
         """
@@ -75,10 +72,6 @@ class MonteCarloQAgent:
 
         if np.random.random() < self.epsilon:
             chosen_action = np.random.choice(self.num_actions)  # randomly explore
-
-            # The next 2 lines are cheating - they are specific to mountain car, as pseudo off-policy learning
-            # if self.previous_action is None: self.previous_action = 0
-            # chosen_action = self.previous_action
         else:
                 greedy_choices = RLHelpers.all_argmax(action_values)  # act greedy
                 chosen_action = np.random.choice(greedy_choices)
@@ -96,18 +89,12 @@ class MonteCarloQAgent:
         next_action = self.select_action(state)
         self.run_history.append((reward, self.previous_state, self.previous_action))
 
-        # self.best_yet = np.max([self.best_yet, state[0]]) # DELETE - Reward Shaping
-
         self.previous_state = state
         self.previous_action = next_action
         return next_action
 
     def end(self, reward):
         # DELETE - Reward shaping - this is an example of reward shaping. It's not great, because it's specific to a single
-        # problem (mountain car in this case).
-        # if len(self.run_history) == 200:
-        #     reward += (self.best_yet-0.5)*100
-        #     # reward += self.previous_state[0]*100 - 200
         self.run_history.append((reward, self.previous_state, self.previous_action))
 
         g = 0
@@ -169,7 +156,8 @@ class MonteCarloQAgent:
 if __name__ == "__main__":
     from Agents import MonteCarloQAgent
     from FunctionApproximators import TileCodingStateActionApproximator
-    import Trainer
+    from Trainers import GymTrainer
+    from ToolKit.PlottingTools import PlottingTools
 
     ############### Environment Setup (and configuration of agent for env) ###############
 
@@ -226,28 +214,27 @@ if __name__ == "__main__":
     ############### Trainer Setup (load run history) ###############
     trainer_file_path = os.getcwd() + r"/../TrainingHistory/History_%s_%s.p" % (agent.name, env_name)
 
-    trainer = Trainer.Trainer(env, agent)
+    trainer = GymTrainer.GymTrainer(env, agent)
     if(load_status):
         trainer.load_run_history(trainer_file_path)
 
 
     ############### Define Run inputs and Run ###############
-    total_episodes = 1000
+    total_episodes = 10
     max_steps = 1000
     render_interval = 0 # 0 is never
     frame_delay = 0.01
 
-    trainer.run_multiple_episodes(total_episodes, max_steps, render_interval, frame_delay) # multiple runs for up to total_steps
+    trainer.run_multiple_episodes(total_episodes, max_steps, render_interval, frame_delay)
 
     ############### Save to file and plot progress ###############
     agent.save_agent_memory(agent_file_path)
     trainer.save_run_history(trainer_file_path)
-    Trainer.plot(agent, np.array(trainer.rewards))
-    # trainer.plot_value_function()
+    PlottingTools.plot_smooth(trainer.rewards)
+    # PlottingTools.plot_action_value_2d(agent.value_approximator)
 
-    import Trainer
     if env_name == 'RandomWalk_v0':
         x = [x for x in range(1000)]
         y_estimate = [np.average(agent.value_approximator.get_values(np.array([x]))) for x in range(1000)]
         y_actual = [ (x-500)/500 for x in range(1000)]
-        Trainer.multiline_plot(x, y_estimate, y_actual)
+        PlottingTools.multiline_plot(x, y_estimate, y_actual)

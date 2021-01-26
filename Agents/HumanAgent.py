@@ -125,7 +125,7 @@ class HumanAgent:
         pass
 
 if __name__ == "__main__":
-    import Trainer
+    from Trainers import GymTrainer
     import gym
 
     ############### Environment Setup (and configuration of agent for env) ###############
@@ -141,7 +141,7 @@ if __name__ == "__main__":
 
     ############### Trainer Setup (load run history) ###############
     trainer_file_path = None
-    trainer = Trainer.Trainer(env, agent)
+    trainer = GymTrainer.GymTrainer(env, agent)
     total_episodes = 1
     max_steps = 1000
     render_interval = 1 # # I better be able to see if I'm playing

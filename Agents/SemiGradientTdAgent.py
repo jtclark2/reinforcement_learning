@@ -243,11 +243,14 @@ class SemiGradientTdAgent:
 if __name__ == "__main__":
     from FunctionApproximators import TileCodingStateActionApproximator
     from Models import DeterministicModel
-    import Trainer
+    from Trainers import GymTrainer
+    from ToolKit.PlottingTools import PlottingTools
     import gym
 
     ############### Environment Setup (and configuration of agent for env) ###############
-
+    total_episodes = 10
+    max_steps = 1000
+    render_interval = 0 # 0 is never
 
     # Specific to CartPole-v1
     # ??? pos, vel, ang_pos, ang_vel ???
@@ -313,17 +316,13 @@ if __name__ == "__main__":
     ############### Trainer Setup (load run history) ###############
     trainer_file_path = os.getcwd() + r"/../TrainingHistory/History_%s_%s.p" % (agent.name, env_name)
 
-    trainer = Trainer.Trainer(env, agent)
+    trainer = GymTrainer.GymTrainer(env, agent)
     if(load_status):
         trainer.load_run_history(trainer_file_path)
 
     ############### Define Run inputs and Run ###############
-    total_episodes = 100
-    max_steps = 1000
-    render_interval = 0 # 0 is never
-
     off_policy_agent = agent_info.get("off_policy_agent", None)
-    if  off_policy_agent is not None and off_policy_agent.name == "Human":
+    if off_policy_agent is not None and off_policy_agent.name == "Human":
         # For human as the off-policy, I'm currently playing 'live', so I have to render, and limit episodes
         total_episodes = 10
         render_interval = 1
@@ -333,12 +332,17 @@ if __name__ == "__main__":
     ############### Save to file and plot progress ###############
     agent.save_agent_memory(agent_file_path)
     trainer.save_run_history(trainer_file_path)
-    Trainer.plot(agent, np.array(trainer.rewards) )
-    # TODO: extend plot_value_function to allow direct input, currently assumes observation space is 2D (eg: pos, vel)
-    trainer.plot_value_function()
+    PlottingTools.plot_smooth(trainer.rewards)
+
+    PlottingTools.plot_action_value_2d(agent.value_approximator)
 
     if env_name == 'RandomWalk_v0':
         x = [x for x in range(1000)]
         y_estimate = [np.average(agent.value_approximator.get_values(np.array([x]))) for x in range(1000)]
         y_actual = [ (x-500)/500 for x in range(1000)]
-        Trainer.multiline_plot(x, y_estimate, y_actual)
+        GymTrainer.multiline_plot(x, y_estimate, y_actual)
+
+
+
+
+    # get_mountain_car_configuration()
