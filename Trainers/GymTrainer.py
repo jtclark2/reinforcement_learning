@@ -12,7 +12,7 @@ class GymTrainer():
         self.observation = env.reset()
         self.agent = agent
 
-    def run_multiple_episodes(self, total_episodes, max_steps_per_run, render_interval=0, frame_delay=0.05):
+    def run_multiple_episodes(self, total_episodes, render_interval=0, frame_delay=0.05):
         """
         This may need to rethinking with regard to termination condition...we may want more flexibility than a fixed
         number of steps in more advanced situations.
@@ -29,14 +29,15 @@ class GymTrainer():
         average_reward = None
         render = render_interval
         while(episode_count < total_episodes):
-            steps, reward = self.run_episode(max_steps_per_run, render, frame_delay)
+            reward = self.run_episode(render, frame_delay)
             self.rewards.append(reward)
             greatest_reward = max(greatest_reward, reward)
             learning_rate = 1/100
-            if average_reward is None: average_reward = reward
+            if average_reward is None: average_reward = 0
             average_reward = average_reward*(1-learning_rate) + reward*(learning_rate)
             episode_count += 1
-            print("Episode: %d/%d, Reward: %f, Best: %f, Average: %f" % (episode_count, total_episodes, reward, greatest_reward, average_reward))
+            if episode_count % 10 == 0:
+                print("Episode: %d/%d, Reward: %f, Best: %f, Average: %f" % (episode_count, total_episodes, reward, greatest_reward, average_reward))
 
             # Render every n episodes
             if render_interval != 0 and episode_count % render_interval == 0:
@@ -49,9 +50,9 @@ class GymTrainer():
             # if episode_count % 1000 == 0:
             #     self.agent.save_agent_memory(agent_file_path)
             #     self.save_run_history(history_file_path)
+        return average_reward
 
-
-    def run_episode(self, max_steps, render, frame_delay):
+    def run_episode(self, render, frame_delay):
         """
         Initializes env, and runs until done.
 
@@ -68,7 +69,7 @@ class GymTrainer():
         self.agent.reset()
         total_reward = 0
         action = self.agent.start(self.observation)
-        for step in range(max_steps):
+        while True:
             if render:
                 time.sleep(frame_delay)
                 self.env.render()
@@ -83,7 +84,7 @@ class GymTrainer():
                 action = self.agent.step(reward, self.observation)
 
         self.env.close()
-        return step, total_reward
+        return total_reward
 
     def save_run_history(self, save_path=""):
         try:

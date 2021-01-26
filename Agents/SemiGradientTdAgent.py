@@ -77,7 +77,10 @@ class SemiGradientTdAgent:
             chosen_action = np.random.choice(self.num_actions)  # randomly explore
         else:
                 greedy_choices = RLHelpers.all_argmax(action_values)  # act greedy
-                chosen_action = np.random.choice(greedy_choices)
+                try:
+                    chosen_action = np.random.choice(greedy_choices)
+                except:
+                    pass
 
         return chosen_action # , action_values[chosen_action]
 
@@ -88,7 +91,7 @@ class SemiGradientTdAgent:
         # Greedy
         action_values = self.value_approximator.get_values(state)
         greedy_choices = RLHelpers.all_argmax(action_values) # technically
-        policy[greedy_choices] += (1 - epsilon)/len(greedy_choices)
+        policy[greedy_choices] += (1 - self.epsilon)/len(greedy_choices)
 
         assert .999 < policy.sum() < 1.001
         return np.array(policy)
@@ -125,7 +128,7 @@ class SemiGradientTdAgent:
 
         if self.model is not None:
             self.model.record_transition(self.previous_state, self.previous_action, reward, state)
-            model.simulate(self._update_q) # learn by simulating previous experience
+            self.model.simulate(self._update_q) # learn by simulating previous experience
 
         self.previous_state = state
         self.previous_action = next_action
@@ -239,110 +242,256 @@ class SemiGradientTdAgent:
             "\n\tCould not find file: %s" % (load_path))
             return False
 
-
 if __name__ == "__main__":
+
     from FunctionApproximators import TileCodingStateActionApproximator
     from Models import DeterministicModel
     from Trainers import GymTrainer
     from ToolKit.PlottingTools import PlottingTools
     import gym
 
+    def setup_and_train(config, total_episodes = 100, render_interval = 0, load = False, save = False):
+        # Unpack config
+        state_boundaries = config['state_boundaries']
+        env = config['env']
+        env_name = config['env_name']
+        ### Hyperparameters ###
+        tile_resolution = config['tile_resolution']
+        num_tilings = config['num_tilings']
+        epsilon = config['epsilon']
+        gamma = config['gamma']
+        alpha = config['alpha']
+        model = config['model']
+        off_policy_agent = config['off_policy_agent']
+        algorithm = config['algorithm']
+
+        ############### Create And Configure Agent ###############
+        approximator = TileCodingStateActionApproximator.TileCodingStateActionApproximator(
+            env_name=env_name,
+            state_boundaries=state_boundaries,
+            num_actions=env.action_space.n,
+            tile_resolution=tile_resolution,
+            num_tilings=num_tilings)
+
+        agent_info = {"num_actions": env.action_space.n,
+                      "epsilon": epsilon,
+                      "gamma": gamma,
+                      "alpha": alpha,
+                      "algorithm": algorithm,
+                      "state_action_value_approximator": approximator,
+                      "off_policy_agent": off_policy_agent,
+                      "model": model
+                      }
+        agent = SemiGradientTdAgent(agent_info)
+
+        ############### Create Trainer ###############
+        trainer = GymTrainer.GymTrainer(env, agent)
+
+        ############### Load prior experience/history ###############
+        agent_file_path = os.getcwd() + r"/AgentMemory/Agent_%s_%s.p" % (agent.name, env_name)
+        trainer_file_path = os.getcwd() + r"/../TrainingHistory/History_%s_%s.p" % (agent.name, env_name)
+        if load:
+
+            load_status = agent.load_agent_memory(agent_file_path)
+            if (load_status):
+                trainer.load_run_history(trainer_file_path)
+
+        ############### Train ###############
+        convergent_reward = trainer.run_multiple_episodes(total_episodes, render_interval)  # multiple runs for up to total_steps
+
+        ############### Save to file and plot progress ###############
+        if save:
+            agent.save_agent_memory(agent_file_path)
+            trainer.save_run_history(trainer_file_path)
+
+        return agent, trainer
+
+    def get_mountain_car_configuration():
+        config = {}
+
+        ### Intrinsic to MountainCar-v0 ###
+        # observations = [pos, vel]
+        env_name = 'MountainCar-v0'
+        # In theory, env.observation_space.high and env.observation_space.low will return these; however, they allow
+        # inf for values they don't really care about, and that wreaks havoc on the tile mapper, which needs bounds
+        # fully defined
+        config['state_boundaries'] = np.array([[-1.2, 0.5], [-0.07, 0.07]])
+        config['env'] = gym.make(env_name)
+        config['env_name'] = env_name
+
+        ### Hyperparameters ###
+        # 8 to 32 is reasonable. > 32 adds very little, and gets expensive
+        config['tile_resolution'] = np.array([32, 32])
+        config['num_tilings'] = 32
+        config['epsilon'] = 0.1  # between 0 - 0.1 is pretty reasonable for this problem
+        config['gamma'] = 1  # discount factor - pretty much always 1 for this problem, since it's episodic
+        config['alpha'] = 1 / (2 ** 1)  # learning rate: anywhere from 1 (high, but it works) to 1/16 work well
+        config['model'] = DeterministicModel.DeterministicModel(5)  # 5 is reasonably fast. None is also reasonable
+        config['off_policy_agent'] = None
+        config['algorithm'] = TdControlAlgorithm.QLearner
+
+        return config
+
+    def get_cart_pole_config():
+        config = {}
+
+        ### Intrinsic to CartPole-v1 ###
+        # observations = [pos, vel, ang_pos, ang_vel]
+        env_name = 'CartPole-v1'
+        # In theory, env.observation_space.high and env.observation_space.low will return these; however, they allow
+        # inf for values they don't really care about, and that wreaks havoc on the tile mapper, which needs bounds
+        # fully defined
+        config['state_boundaries'] = np.array([[-2.5, 2.5], [-2.5, 2.5], [-0.3, 0.3], [-1, 1]])
+        config['env'] = gym.make(env_name)
+        config['env_name'] = env_name
+
+        ### Hyperparameters ###
+        config['tile_resolution'] = np.array([16,16,16,16])
+        config['num_tilings'] = 32
+        config['epsilon'] = 0.1  # between 0 - 0.1 is pretty reasonable for this problem
+        config['gamma'] = 1  # discount factor - pretty much always 1 for this problem, since it's episodic
+        config['alpha'] = 1 / (2 ** 1)  # learning rate: anywhere from 1/2 (high, but it works) to 1/32 work well
+        config['model'] = DeterministicModel.DeterministicModel(5)  # 5 is reasonably fast. None is also reasonable
+        config['off_policy_agent'] = None
+        config['algorithm'] = TdControlAlgorithm.QLearner
+
+        return config
+
+    def get_random_walk_config():
+        from Environments import RandomWalkEnv
+        config = {}
+
+        ### Intrinsic to RandomWalk_v0 ###
+        # observations = [pos]
+        env_name = 'RandomWalk_v0'
+        # In theory, env.observation_space.high and env.observation_space.low will return these; however, they allow
+        # inf for values they don't really care about, and that wreaks havoc on the tile mapper, which needs bounds
+        # fully defined
+        config['state_boundaries'] = np.array([[0,1000]])
+        config['env'] = RandomWalkEnv.RandomWalkEnv()
+        config['env_name'] = env_name
+
+        ### Hyperparameters ###
+        config['tile_resolution'] = np.array([10])
+        config['num_tilings'] = 1
+        config['epsilon'] = 1  # For the true random walk, 1. Obviously, it's a bit silly. It's more of a diagnostic.
+        config['gamma'] = 1  # discount factor - pretty much always 1 for this problem, since it's episodic
+        config['alpha'] = 1 / (2 ** 5)  # learning rate
+        config['model'] = None
+        config['off_policy_agent'] = None
+        config['algorithm'] = TdControlAlgorithm.QLearner
+
+        return config
+
+
+    """
+    A bit of informal testing, though I'm not writing true unit testing for this - just a very basic sanity check.
+    """
+    def test__mountain_car_q_learner():
+        """
+        Purpose:
+            1) Test running with mountain car env. Test dimension matching in 2D observation space
+            2) Test convergence in sparsely reward env (initialization is 0, optimistic for this problem).
+            3) Test Q-learner algorithm, with model simulation.
+        :return: None
+        """
+        total_episodes = 60
+        render_interval = 0 # 0 is never
+        config = get_mountain_car_configuration()
+        config['tile_resolution'] = np.array([8, 8])   # Just speeding things up a bit
+        config['num_tilings'] = 8
+        config['alpha'] = 1/4
+        agent, trainer = setup_and_train(config, total_episodes, render_interval)
+        convergent_reward = np.average(trainer.rewards[-20:])
+        assert convergent_reward > -180 # I've seen about -160 on ave
+        print(f"test__mountain_car_q_learner converged to {convergent_reward} in {total_episodes} episodes!")
+
+    def test__expected_sarsa_cart_pole():
+        """
+        Purpose:
+            1) Test Cart Pole Environment, which has 4D observation space.
+            2) Test Expected Sarsa algorithm
+            3) Test Agent Save and Load
+
+        Future improvement (to Trainer, not this module): Measure progress in steps, rather than episodes, for more
+        consistent pace of learning.
+        :return: None
+        """
+        total_episodes = 100
+        render_interval = 0  # 0 is never
+        thresh = 140
+        config = get_cart_pole_config()
+        config['algorithm'] = TdControlAlgorithm.ExpectedSarsa
+        config['model'] = None
+
+        _, trainer = setup_and_train(config, total_episodes, render_interval, load=False, save=True)
+        convergent_reward = np.average(trainer.rewards[-20:])
+        for i in range(1,10): # Happy to give it up to 1000 steps to converge, but it takes forever, so we can check early
+            _, trainer = setup_and_train(config, total_episodes, render_interval, load=True, save=True)
+            convergent_reward = np.average(trainer.rewards[-20:])
+            if convergent_reward > thresh:
+                break
+
+        assert convergent_reward > thresh
+        print(f"test__expected_sarsa_cart_pole converged to {convergent_reward} in {len(trainer.rewards)} episodes!")
+
+    def test__sarsa_walk():
+        """
+        Purpose:
+            1) Test in 1D RandomWalk Env.
+            2) Test Sarsa algorithm
+        :return:
+        """
+        total_episodes = 200
+        render_interval = 0  # 0 is never
+        config = get_random_walk_config()
+        config['algorithm'] = TdControlAlgorithm.Sarsa
+        config['model'] = None
+        config['epsilon'] = 0.5
+        agent, trainer = setup_and_train(config, total_episodes, render_interval)
+        convergent_reward = np.average(trainer.rewards[-20:])
+        assert convergent_reward > .8
+        print(f"test__sarsa_walk converged to {convergent_reward} in {total_episodes} episodes!")
+
+    def tests__all_semi_gradient():
+        test__mountain_car_q_learner()
+        test__expected_sarsa_cart_pole()
+        test__sarsa_walk()
+        print("All SemiGradientTdAgent tests passed!")
+
     ############### Environment Setup (and configuration of agent for env) ###############
-    total_episodes = 10
-    max_steps = 1000
+    total_episodes = 300
     render_interval = 0 # 0 is never
 
-    # Specific to CartPole-v1
-    # ??? pos, vel, ang_pos, ang_vel ???
-    # really favors more exploration epsilon >= 0.1...lower epsilon takes forever to learn, and higher never stabilizes
-    # alpha can be as high as 1 and stay fairly stable, though there is no need to push it
-    # env_name = 'CartPole-v1'
-    # state_boundaries = np.array([[-2.5, 2.5], [-2.5, 2.5], [-0.3, 0.3], [-1, 1]])
-    # tile_resolution = np.array([16,16,16,16])
-    # num_tilings = 32
-    # env = gym.make(env_name)
-    # epsilon = 0.1 # 0.01
-    # gamma = 1  # discount factor
-    # alpha = 1/(2**1) # learning rate: .1 to .5 Converges in a few ~1000 episodes down to about -100
+    env_selection = "mountain_car"
+    mode = "Normal" # "Test", "Manual", "Normal"
+    plot = True
+    configs = {"mountain_car": get_mountain_car_configuration,
+               "cart_pole": get_cart_pole_config,
+               "random_walk": get_random_walk_config}
 
-    # ---Specific to MountainCar-v0---
-    # observations = [pos, vel]
-    env_name = 'MountainCar-v0'
-    state_boundaries = np.array([[-1.2, 0.5], [-0.07, 0.07]])
-    tile_resolution = np.array([32, 32])
-    num_tilings = 32
-    env = gym.make(env_name)
-    epsilon = 0 # 0.01
-    gamma = 1  # discount factor
-    alpha = 1/(2**0) # learning rate: .1 to .5 Converges in a few ~1000 episodes down to about -100
-    model = DeterministicModel.DeterministicModel(5)
+    if mode == "Test":
+        tests__all_semi_gradient()
+    else:
+        config = configs[env_selection]()
+        agent, trainer = setup_and_train(config, total_episodes, render_interval)
 
+        if plot:
+            PlottingTools.plot_smooth(trainer.rewards)
 
-    # # Specific to RandomWalk (a custom pseudo-env I created)
-    # from Environments import RandomWalkEnv
-    # env_name = 'RandomWalk_v0'
-    # state_boundaries = np.array([[0,1000]])
-    # tile_resolution = np.array([10])
-    # env = RandomWalkEnv.RandomWalkEnv()
-    # num_tilings = 1
-    # epsilon = 1 # 1 # 0.01
-    # gamma = 1  # discount factor
-    # alpha = 1/(2**5) # learning rate: .1 to .5 Converges in a few ~1000 episodes down to about -100
-    # model =  None
+            if env_selection == "mountain_car":
+                PlottingTools.plot_action_value_2d(agent.value_approximator)
 
-    approximator = TileCodingStateActionApproximator.TileCodingStateActionApproximator(
-        env_name,
-        state_boundaries,
-        env.action_space.n,
-        tile_resolution = tile_resolution,
-        num_tilings = num_tilings)
+            if env_selection == "random_walk":
+                x = [x for x in range(1000)]
+                y_estimate = [np.average(agent.value_approximator.get_values(np.array([x]))) for x in range(1000)]
+                y_actual = [ (x-500)/500 for x in range(1000)]
+                PlottingTools.multiline_plot(x, y_estimate, y_actual)
 
-    ############### Create And Configure Agent ###############
-    # Tile Coder Setup
-    agent_info = {"num_actions": env.action_space.n,
-                  "epsilon": epsilon,
-                  "gamma": gamma,
-                  "alpha": alpha,
-                  "algorithm": TdControlAlgorithm.QLearner,
-                  "state_action_value_approximator": approximator,
-                  # "off_policy_agent": HumanAgent.HumanAgent(),
-                  "model": model
-                  }
-
-    agent = SemiGradientTdAgent(agent_info)
-    agent_file_path = os.getcwd() + r"/AgentMemory/Agent_%s_%s.p" % (agent.name, env_name)
-    load_status = agent.load_agent_memory(agent_file_path)
-
-    ############### Trainer Setup (load run history) ###############
-    trainer_file_path = os.getcwd() + r"/../TrainingHistory/History_%s_%s.p" % (agent.name, env_name)
-
-    trainer = GymTrainer.GymTrainer(env, agent)
-    if(load_status):
-        trainer.load_run_history(trainer_file_path)
 
     ############### Define Run inputs and Run ###############
-    off_policy_agent = agent_info.get("off_policy_agent", None)
-    if off_policy_agent is not None and off_policy_agent.name == "Human":
-        # For human as the off-policy, I'm currently playing 'live', so I have to render, and limit episodes
-        total_episodes = 10
-        render_interval = 1
-
-    trainer.run_multiple_episodes(total_episodes, max_steps, render_interval) # multiple runs for up to total_steps
-
-    ############### Save to file and plot progress ###############
-    agent.save_agent_memory(agent_file_path)
-    trainer.save_run_history(trainer_file_path)
-    PlottingTools.plot_smooth(trainer.rewards)
-
-    PlottingTools.plot_action_value_2d(agent.value_approximator)
-
-    if env_name == 'RandomWalk_v0':
-        x = [x for x in range(1000)]
-        y_estimate = [np.average(agent.value_approximator.get_values(np.array([x]))) for x in range(1000)]
-        y_actual = [ (x-500)/500 for x in range(1000)]
-        GymTrainer.multiline_plot(x, y_estimate, y_actual)
-
-
-
-
-    # get_mountain_car_configuration()
+    # off_policy_agent = config.get("off_policy_agent", None)
+    # if off_policy_agent is not None and off_policy_agent.name == "Human":
+    #     # For human as the off-policy, I'm currently playing 'live', so I have to render, and limit episodes to 10
+    #     total_episodes = 10
+    #     render_interval = 1

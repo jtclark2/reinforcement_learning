@@ -225,7 +225,7 @@ if __name__ == "__main__":
     render_interval = 0 # 0 is never
     frame_delay = 0.01
 
-    trainer.run_multiple_episodes(total_episodes, max_steps, render_interval, frame_delay)
+    trainer.run_multiple_episodes(total_episodes, render_interval, frame_delay)
 
     ############### Save to file and plot progress ###############
     agent.save_agent_memory(agent_file_path)
