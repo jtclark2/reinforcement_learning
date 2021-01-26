@@ -48,13 +48,15 @@ class SemiGradientTdAgent:
         assert isinstance(self.algorithm, TdControlAlgorithm)
         self.name = self.algorithm.name
         self.off_policy_agent = agent_info.get("off_policy_agent", None)
-        # This can work with SARSA and Expected SARSA, but then you really should use importance sampling, which
-        # is not a priority for this project, because:
+        # Off-policy and simulation can work with SARSA and Expected SARSA, but then you really should use importance
+        # # sampling, which is not a priority for this project, because:
         #   1) The agent interface I use for off-policy action selection does not expose the policy directly.
         #   We could build up an model for the policy, but that is far more effort than this application merits.
         #   2) This project is intended to practice practical skills, and that's neither a concept that i need to
         #   solidify, nor a frequently used/practical approach to gain experience implementing.
-        # assert self.algorithm == TdControlAlgorithm.QLearner
+        if self.algorithm != TdControlAlgorithm.QLearner and \
+                (self.off_policy_agent is not None or self.model is not None):
+            raise Exception("'Off_policy_agent' and 'model' should only be used ith 'algorithm' = QLearner.")
 
     def reset(self, agent_info={}):
         """
@@ -162,9 +164,17 @@ class SemiGradientTdAgent:
             delta = reward + self.gamma * np.sum(self._get_policy(state) * action_values) - previous_action_value
         else:
             raise Exception("Invalid algorithm selected for TD Control Agent: %s. Select from TdControlAlgorithm enum.")
+        # delta -= self.average_reward
+        # self.average_reward = self.average_reward + self.beta*delta
         self.value_approximator.update_weights(delta * self.alpha, previous_state, previous_action)
 
         # EXPERIMENTAL correction to semi-gradient descent, making it true gradient descent
+        # Basically, semigrad approximates deltaError = (Ut-v(St,w))(d(Ut)/dw - dv(St,w)/dw) by dropping the d(Ut) term.
+        # This experimental correction adds it back in. ExperimentalCorrection = (Ut-v(St,w))(d(Ut)/dw)
+        # where U = R' + gamma*v_hat(S', w) = R' + gamma*d(v_hat)/dw -->  -d(U)/dw = gamma*x,
+        # and we already calculated delta = (Ut-v(St,w))
+        # Correction = (Ut-v(St,w))(gamma * d(v_hat)/dw) = -delta * gamma  ... the derivative is applied in the
+        # value approximator's update, and the alpha is the same step size used on the original update
         # It seems to work - still converges, and matches Monte Carlo better this way. That said, neither this form
         # or the MC form match my expectations. Book has a linear plot, which this is not.
         # More investigation would be needed.
@@ -173,7 +183,7 @@ class SemiGradientTdAgent:
         FULL_GRADIENT_EXPERIMENT = False
         if FULL_GRADIENT_EXPERIMENT and next_action is None:
             next_action = self.select_action(state)
-        self.value_approximator.update_weights(-delta * self.alpha, state, next_action)
+            self.value_approximator.update_weights(-delta * self.alpha * self.gamma, state, next_action)
         # End of Experimental
 
     def end(self, reward):
@@ -230,7 +240,6 @@ class SemiGradientTdAgent:
             return False
 
 
-
 if __name__ == "__main__":
     from FunctionApproximators import TileCodingStateActionApproximator
     from Models import DeterministicModel
@@ -253,30 +262,30 @@ if __name__ == "__main__":
     # gamma = 1  # discount factor
     # alpha = 1/(2**1) # learning rate: .1 to .5 Converges in a few ~1000 episodes down to about -100
 
-    # # ---Specific to MountainCar-v0---
-    # # observations = [pos, vel]
-    # env_name = 'MountainCar-v0'
-    # state_boundaries = np.array([[-1.2, 0.5], [-0.07, 0.07]])
-    # tile_resolution = np.array([32, 32])
-    # num_tilings = 32
-    # env = gym.make(env_name)
-    # epsilon = 0.1 # 0.01
-    # gamma = 1  # discount factor
-    # alpha = 1/(2**1) # learning rate: .1 to .5 Converges in a few ~1000 episodes down to about -100
-    # model = DeterministicModel.DeterministicModel(5)
-
-
-    # Specific to RandomWalk (a custom pseudo-env I created)
-    from Environments import RandomWalkEnv
-    env_name = 'RandomWalk_v0'
-    state_boundaries = np.array([[0,1000]])
-    tile_resolution = np.array([10])
-    env = RandomWalkEnv.RandomWalkEnv()
-    num_tilings = 1
-    epsilon = 1 # 1 # 0.01
+    # ---Specific to MountainCar-v0---
+    # observations = [pos, vel]
+    env_name = 'MountainCar-v0'
+    state_boundaries = np.array([[-1.2, 0.5], [-0.07, 0.07]])
+    tile_resolution = np.array([32, 32])
+    num_tilings = 32
+    env = gym.make(env_name)
+    epsilon = 0 # 0.01
     gamma = 1  # discount factor
-    alpha = 1/(2**5) # learning rate: .1 to .5 Converges in a few ~1000 episodes down to about -100
-    model =  None
+    alpha = 1/(2**0) # learning rate: .1 to .5 Converges in a few ~1000 episodes down to about -100
+    model = DeterministicModel.DeterministicModel(5)
+
+
+    # # Specific to RandomWalk (a custom pseudo-env I created)
+    # from Environments import RandomWalkEnv
+    # env_name = 'RandomWalk_v0'
+    # state_boundaries = np.array([[0,1000]])
+    # tile_resolution = np.array([10])
+    # env = RandomWalkEnv.RandomWalkEnv()
+    # num_tilings = 1
+    # epsilon = 1 # 1 # 0.01
+    # gamma = 1  # discount factor
+    # alpha = 1/(2**5) # learning rate: .1 to .5 Converges in a few ~1000 episodes down to about -100
+    # model =  None
 
     approximator = TileCodingStateActionApproximator.TileCodingStateActionApproximator(
         env_name,
@@ -285,16 +294,13 @@ if __name__ == "__main__":
         tile_resolution = tile_resolution,
         num_tilings = num_tilings)
 
-    model = None # DeterministicModel.DeterministicModel(5)
-
-
     ############### Create And Configure Agent ###############
     # Tile Coder Setup
     agent_info = {"num_actions": env.action_space.n,
                   "epsilon": epsilon,
                   "gamma": gamma,
                   "alpha": alpha,
-                  "algorithm": TdControlAlgorithm.Sarsa,
+                  "algorithm": TdControlAlgorithm.QLearner,
                   "state_action_value_approximator": approximator,
                   # "off_policy_agent": HumanAgent.HumanAgent(),
                   "model": model
@@ -312,7 +318,7 @@ if __name__ == "__main__":
         trainer.load_run_history(trainer_file_path)
 
     ############### Define Run inputs and Run ###############
-    total_episodes = 1000
+    total_episodes = 100
     max_steps = 1000
     render_interval = 0 # 0 is never
 
@@ -329,9 +335,8 @@ if __name__ == "__main__":
     trainer.save_run_history(trainer_file_path)
     Trainer.plot(agent, np.array(trainer.rewards) )
     # TODO: extend plot_value_function to allow direct input, currently assumes observation space is 2D (eg: pos, vel)
-    # trainer.plot_value_function()
+    trainer.plot_value_function()
 
-    import Trainer
     if env_name == 'RandomWalk_v0':
         x = [x for x in range(1000)]
         y_estimate = [np.average(agent.value_approximator.get_values(np.array([x]))) for x in range(1000)]

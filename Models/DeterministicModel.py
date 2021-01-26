@@ -1,5 +1,7 @@
 import random
 import numpy as np
+import time
+import uuid
 
 class DeterministicModel:
     """
@@ -21,45 +23,56 @@ class DeterministicModel:
         self.max_record_count = max_record_count
         self.simulation_frequency = simulation_frequency
         self.transition_record = {}
-        # This list could be generated as transition_record.keys(), but that would create a painter's problem
+        # This list could be generated as transition_record.keys(), but that creates a painter's problem
+        # This costs a bit of memory, but it's much faster.
         self.transition_record_list = []
 
-    def _get_hash(self, a, b):
-        return (tuple(a), b)
+    def _get_hash(self, state, action, uid=None):
+        """
+        Use to get unique hashkey. Technically, only the uid is needed, and a streamlined/memory efficient
+        implementation would remove state and action. However, for learning purposes, it is conceptual consistent
+        with the environment step function, p(s',r|s,a), where s = state, a = action, and p',r can be retrieved using
+        self.simulate_env_step()
+        :param state: state of model.
+        :param action: action selected for this environment update.
+        :param uid: unique id. Used to avoid hash collisions.
+            None is used to generate a new hash.
+            In order to lookup a recorded hash, pass in a valid uid.
+        :return:
+        """
+        if uid is None: # Create new hash
+            hash = (tuple(state), action, uuid.uuid4())
+        else: # format hash for lookup
+            hash = (tuple(state), action, uid)
+        return hash
 
     def record_transition(self, previous_state, previous_action, reward, state):
-        if(len(self.transition_record) > self.max_record_count):
-            # pop the first element out of the list, and remove the corresponding dictionary entry
-            deleted = self.transition_record_list.pop(0)
-            try:
-                del self.transition_record[deleted]
-            except:
-                # Whoops, we probably already deleted it, because the hash I've chosen does not guarantee uniqueness
-                # Luckily, this doesn't really matter. The likelihood of these collisions is low,
-                # and we only lose 1 recorded sample.
-                pass
-
         hash_key = self._get_hash(previous_state, previous_action)
         self.transition_record_list.append(hash_key)
         self.transition_record[hash_key] = (reward, state)
+
+        if(len(self.transition_record) > self.max_record_count):
+            # pop the first element out of the list, and remove the corresponding dictionary entry
+            deleted = self.transition_record_list.pop(0)
+            del self.transition_record[deleted]
 
     def select_state_action(self):
         """
         Randomly select a state-action pair.
         """
-        state, action = random.choice(self.transition_record_list)
-        return np.array(state), action
+        state, action, unique_id = random.choice(self.transition_record_list)
+        return np.array(state), action, unique_id
 
-    def simulate_env_step(self, previous_state, previous_action):
-        hash_key = self._get_hash(previous_state, previous_action)
+    def simulate_env_step(self, previous_state, previous_action, unique_id):
+        hash_key = self._get_hash(previous_state, previous_action, unique_id)
         return self.transition_record[hash_key]
 
     def simulate(self, update_q):
         # learn from simulation
         for _ in range(self.simulation_frequency):
             # randomly select simulated state and action
-            sim_previous_state, sim_previous_action = self.select_state_action()
-            sim_reward, sim_state = self.simulate_env_step(sim_previous_state, sim_previous_action)
-            sim_next_action = None # not need for update under Q algorithm
+            sim_previous_state, sim_previous_action, unique_id = self.select_state_action()
+            sim_reward, sim_state = self.simulate_env_step(sim_previous_state, sim_previous_action, unique_id)
+            sim_next_action = None # not needed for update under Q-learning algorithm
             # Update q based on simulated values
             update_q(sim_previous_state, sim_previous_action, sim_reward, sim_state, sim_next_action)
