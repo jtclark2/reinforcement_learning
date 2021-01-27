@@ -4,7 +4,7 @@ import numpy as np
 
 class TileCodingStateActionApproximator:
 
-    def __init__(self, env_name, state_boundaries, num_actions, tile_resolution, num_tilings=8):
+    def __init__(self, env_name, state_boundaries, num_actions, tile_resolution, num_tilings=8, initial_value = 0.0):
         """
         Initializes the Tile Coder.
         The tile encoder wraps tiles3.iht (index hash table). This enables easier generation of a tile encoding.
@@ -41,7 +41,7 @@ class TileCodingStateActionApproximator:
         self._iht = tc.IHT(self._total_possible_tiles)
 
         # Consider generalizes this in the future. This is optimistic for anything < 1.
-        self._weights = np.ones((self.num_actions, self._total_possible_tiles)) * 0.0 # TODO: pass in initial values
+        self._weights = np.ones((self.num_actions, self._total_possible_tiles)) * initial_value # TODO: pass in initial values
 
     def get_values(self, state):
         """

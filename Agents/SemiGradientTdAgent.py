@@ -77,10 +77,7 @@ class SemiGradientTdAgent:
             chosen_action = np.random.choice(self.num_actions)  # randomly explore
         else:
                 greedy_choices = RLHelpers.all_argmax(action_values)  # act greedy
-                try:
-                    chosen_action = np.random.choice(greedy_choices)
-                except:
-                    pass
+                chosen_action = np.random.choice(greedy_choices)
 
         return chosen_action # , action_values[chosen_action]
 
@@ -248,6 +245,7 @@ if __name__ == "__main__":
     from Models import DeterministicModel
     from Trainers import GymTrainer
     from ToolKit.PlottingTools import PlottingTools
+    from Agents.EnergyPumpingMountainCarAgent import EnergyPumpingMountainCarAgent
     import gym
 
     def setup_and_train(config, total_episodes = 100, render_interval = 0, load = False, save = False):
@@ -264,6 +262,7 @@ if __name__ == "__main__":
         model = config['model']
         off_policy_agent = config['off_policy_agent']
         algorithm = config['algorithm']
+        initial_value = config['initial_value']
 
         ############### Create And Configure Agent ###############
         approximator = TileCodingStateActionApproximator.TileCodingStateActionApproximator(
@@ -271,7 +270,8 @@ if __name__ == "__main__":
             state_boundaries=state_boundaries,
             num_actions=env.action_space.n,
             tile_resolution=tile_resolution,
-            num_tilings=num_tilings)
+            num_tilings=num_tilings,
+            initial_value=initial_value)
 
         agent_info = {"num_actions": env.action_space.n,
                       "epsilon": epsilon,
@@ -329,6 +329,7 @@ if __name__ == "__main__":
         config['model'] = DeterministicModel.DeterministicModel(5)  # 5 is reasonably fast. None is also reasonable
         config['off_policy_agent'] = None
         config['algorithm'] = TdControlAlgorithm.QLearner
+        config['initial_value'] = 0.0
 
         return config
 
@@ -354,6 +355,7 @@ if __name__ == "__main__":
         config['model'] = DeterministicModel.DeterministicModel(5)  # 5 is reasonably fast. None is also reasonable
         config['off_policy_agent'] = None
         config['algorithm'] = TdControlAlgorithm.QLearner
+        config['initial_value'] = 0.0
 
         return config
 
@@ -380,6 +382,7 @@ if __name__ == "__main__":
         config['model'] = None
         config['off_policy_agent'] = None
         config['algorithm'] = TdControlAlgorithm.QLearner
+        config['initial_value'] = 0.0
 
         return config
 
@@ -404,7 +407,7 @@ if __name__ == "__main__":
         agent, trainer = setup_and_train(config, total_episodes, render_interval)
         convergent_reward = np.average(trainer.rewards[-20:])
         assert convergent_reward > -180 # I've seen about -160 on ave
-        print(f"test__mountain_car_q_learner converged to {convergent_reward} in {total_episodes} episodes!")
+        print(f"test__mountain_car_q_learner converged to {convergent_reward} in {len(trainer.rewards)} episodes!")
 
     def test__expected_sarsa_cart_pole():
         """
@@ -451,9 +454,50 @@ if __name__ == "__main__":
         agent, trainer = setup_and_train(config, total_episodes, render_interval)
         convergent_reward = np.average(trainer.rewards[-20:])
         assert convergent_reward > .8
-        print(f"test__sarsa_walk converged to {convergent_reward} in {total_episodes} episodes!")
+        print(f"test__sarsa_walk converged to {convergent_reward} in {len(trainer.rewards)} episodes!")
+
+    def test__off_policy_q_learner():
+        """
+        Purpose:
+            1) Test off-policy learning.
+        Note (kind of cool):
+            I've seen the best performance with policies that finish, but aren't that great
+            (eg: EnergyPumpingMountainCarAgent with epsilon = 0.5).
+            Great policies start to form a great value-function, but it's so noisy that the agent sort of falls off the
+            good path. It still speeds up learning, just not as well, due to all the mis-steps.
+            Really bad examples, are speed up the process by showing what not to do. However, the search space is small,
+            so the value function is relatively unexplored near the goal, and lots of exploration is still needed.
+            I can draw lots of analogies to trying to learn from an expert and missing things along the way. If you
+            go over it enough, you'll learn it, but it can be useful to experience it yourself to explore questions, and
+            to solidify those gaps in knowledge. Similarly, learning alongside someone who doesn't
+            know anymore than you do speeds things up a bit, but your both making similar mistakes.
+        :return: None
+        """
+        train_episodes = 100
+        test_episodes = 20
+        render_interval = 0 # 0 is never
+        config = get_mountain_car_configuration()
+        config['tile_resolution'] = np.array([8, 8])   # Just speeding things up a bit
+        config['num_tilings'] = 8
+        config['alpha'] = 1/4
+        config['off_policy_agent'] = EnergyPumpingMountainCarAgent()
+        config['epsilon'] = 0.0 # do your best!
+        # initialize pessimistically...discourages exploration, but encourages mimicking off-policy approach
+        # config['initial_value'] = 0
+        agent, trainer = setup_and_train(config, train_episodes, render_interval, save=True) # Train off-policy
+        PlottingTools.plot_action_value_2d(agent.value_approximator)
+
+        config['off_policy_agent'] = None
+        render_interval = 20 # 0 is never
+        agent, trainer = setup_and_train(config, test_episodes, render_interval, load=True) # Run for test
+        convergent_reward = np.average(trainer.rewards[-10:])
+        assert convergent_reward > -170 # I've seen about -150 on ave
+        print(f"test__off_policy_q_learner converged to {convergent_reward} in {len(trainer.rewards)} episodes!")
+        PlottingTools.plot_action_value_2d(agent.value_approximator)
+
 
     def tests__all_semi_gradient():
+        test__off_policy_q_learner
         test__mountain_car_q_learner()
         test__expected_sarsa_cart_pole()
         test__sarsa_walk()
@@ -463,8 +507,8 @@ if __name__ == "__main__":
     total_episodes = 300
     render_interval = 0 # 0 is never
 
-    env_selection = "mountain_car"
-    mode = "Normal" # "Test", "Manual", "Normal"
+    env_selection = "Test"
+    mode = "Test" # "Test", "Manual", "Normal"
     plot = True
     configs = {"mountain_car": get_mountain_car_configuration,
                "cart_pole": get_cart_pole_config,
@@ -487,11 +531,3 @@ if __name__ == "__main__":
                 y_estimate = [np.average(agent.value_approximator.get_values(np.array([x]))) for x in range(1000)]
                 y_actual = [ (x-500)/500 for x in range(1000)]
                 PlottingTools.multiline_plot(x, y_estimate, y_actual)
-
-
-    ############### Define Run inputs and Run ###############
-    # off_policy_agent = config.get("off_policy_agent", None)
-    # if off_policy_agent is not None and off_policy_agent.name == "Human":
-    #     # For human as the off-policy, I'm currently playing 'live', so I have to render, and limit episodes to 10
-    #     total_episodes = 10
-    #     render_interval = 1

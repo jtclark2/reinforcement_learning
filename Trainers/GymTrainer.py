@@ -2,17 +2,20 @@ import time
 import pickle
 import os
 
+# TODO: Pass in a reward shaping function...I know it's frowned upon, beause we all want fully generalized AI,
+# but it is a practical tool that should not be overlooked
 class GymTrainer():
     """
     This class works with Gym environment to train agents.
     """
+
     def __init__(self, env, agent):
         self.rewards = []
         self.env = env
         self.observation = env.reset()
         self.agent = agent
 
-    def run_multiple_episodes(self, total_episodes, render_interval=0, frame_delay=0.05):
+    def run_multiple_episodes(self, total_episodes, render_interval=0, frame_delay=0.01):
         """
         This may need to rethinking with regard to termination condition...we may want more flexibility than a fixed
         number of steps in more advanced situations.
@@ -109,40 +112,10 @@ if __name__ == "__main__":
     from Agents import HumanAgent
     from ToolKit.PlottingTools import PlottingTools
 
-    class AgentStub:
-        def __init__(self):
-            self.vel = 0
-            self.pos = 0
-            self.last_action = 0
-
-        def start(self, state):
-            action = 0
-            self.last_action = action
-            return action
-
-        def step(self, reward, state):
-            # self.pos, self.vel = state
-            # if self.vel >= 0:
-            #     action = 2
-            # else:
-            #     action = 0
-
-            action = 0
-            self.last_action = action
-            return action
-
-        def end(self, reward):
-            pass
-
-        def save_agent_memory(self, save_path):
-            pass
-
-        def load_agent_memory(self, load_path):
-            return True
 
     # TODO: I want to clean up the setup for specific environments...each algorithm needs different setup depending on
     # problem. The differences are just hyperparameters, which is a reasonable level of adjustment. I just need
-    # a slightly more organized/encapsulated way to set them up.
+    # a slightly more organized/encapsulated way to set them up. See SemiGradientTdAgent example
     ############### Environment Setup (and configuration of agent for env) ###############
     env_name = 'MountainCar-v0'
 
@@ -167,7 +140,7 @@ if __name__ == "__main__":
     max_steps = 1000 # turns out most gym.env environments auto-stop (really early in fact)
     render_interval = 1 # 0 is never
     frame_delay = 0.2
-    trainer.run_multiple_episodes(total_episodes, max_steps, render_interval, frame_delay) # multiple runs for up to total_steps
+    trainer.run_multiple_episodes(total_episodes, render_interval, frame_delay) # multiple runs for up to total_steps
 
     # ############### Save to file and plot progress ###############
     agent.save_agent_memory(agent_file_path)

@@ -94,7 +94,6 @@ class MonteCarloQAgent:
         return next_action
 
     def end(self, reward):
-        # DELETE - Reward shaping - this is an example of reward shaping. It's not great, because it's specific to a single
         self.run_history.append((reward, self.previous_state, self.previous_action))
 
         g = 0
