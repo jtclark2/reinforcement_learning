@@ -104,45 +104,30 @@ class GymTrainer():
             print("Warning: Unable to load training_history. Program will proceed without loading.")
             time.sleep(2)
 
-
-
-
 if __name__ == "__main__":
     import gym
     from Agents import HumanAgent
     from ToolKit.PlottingTools import PlottingTools
 
-
-    # TODO: I want to clean up the setup for specific environments...each algorithm needs different setup depending on
-    # problem. The differences are just hyperparameters, which is a reasonable level of adjustment. I just need
-    # a slightly more organized/encapsulated way to set them up. See SemiGradientTdAgent example
     ############### Environment Setup (and configuration of agent for env) ###############
-    env_name = 'MountainCar-v0'
+    env_name = 'Breakout-ram-v0' # 'MountainCar-v0', 'Breakout-v0', 'Breakout-ram-v0', etc.
 
-    env_name = 'Breakout-v0'
-    env_name = 'Breakout-ram-v0'
     history_file_path = os.getcwd() + "/TrainingHistory/" + env_name
     env = gym.make(env_name)
 
     ############### Instantiate and Configure Agent ###############
-    # agent = AgentStub()
     agent = HumanAgent.HumanAgent({"env":env})
-    agent_file_path = "" # We're not really saving, so it does not matter
-    load_status = agent.load_agent_memory(agent_file_path)
 
     ############### Trainer Setup (load run history) ###############
     trainer = GymTrainer(env, agent)
-    if(load_status):
-        trainer.load_run_history(history_file_path)
+    trainer.load_run_history(history_file_path)
 
     ############### Define Run inputs and Run ###############
     total_episodes = 200
-    max_steps = 1000 # turns out most gym.env environments auto-stop (really early in fact)
     render_interval = 1 # 0 is never
-    frame_delay = 0.2
+    frame_delay = 0.05
     trainer.run_multiple_episodes(total_episodes, render_interval, frame_delay) # multiple runs for up to total_steps
 
     # ############### Save to file and plot progress ###############
-    agent.save_agent_memory(agent_file_path)
     trainer.save_run_history(history_file_path)
     PlottingTools.plot_smooth(trainer.rewards)

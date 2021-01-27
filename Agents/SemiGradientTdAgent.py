@@ -164,6 +164,8 @@ class SemiGradientTdAgent:
             delta = reward + self.gamma * np.sum(self._get_policy(state) * action_values) - previous_action_value
         else:
             raise Exception("Invalid algorithm selected for TD Control Agent: %s. Select from TdControlAlgorithm enum.")
+        # TODO: implement average reward
+        # TODO: Implement that other normalization of deviation thing, is that what REINFORCE is?
         # delta -= self.average_reward
         # self.average_reward = self.average_reward + self.beta*delta
         self.value_approximator.update_weights(delta * self.alpha, previous_state, previous_action)
