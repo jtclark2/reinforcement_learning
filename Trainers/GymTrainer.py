@@ -1,6 +1,7 @@
 import time
 import pickle
 import os
+import numpy as np
 
 # TODO: Pass in a reward shaping function...I know it's frowned upon, beause we all want fully generalized AI,
 # but it is a practical tool that should not be overlooked
@@ -15,45 +16,36 @@ class GymTrainer():
         self.observation = env.reset()
         self.agent = agent
 
-    def run_multiple_episodes(self, total_episodes, render_interval=0, frame_delay=0.01):
+    def run_multiple_episodes(self, target_steps, render_interval, frame_delay=0.01):
         """
         This may need to rethinking with regard to termination condition...we may want more flexibility than a fixed
         number of steps in more advanced situations.
 
-        :param total_steps: Total planned steps to be taken. Run will be allowed to complete if it starts before
+        :param target_steps: Total planned steps to be taken. Run will be allowed to complete if it starts before
             reaching this value.
-        :param max_steps_per_run: Single will be forcefully ended after taking this many steps
         :param render_interval: Render will occur once every render_interval episodes
 
         :return: None
         """
-        episode_count = 0
+        step_count = 0
         greatest_reward = float("-inf")
-        average_reward = None
-        render = render_interval
-        while(episode_count < total_episodes):
-            reward = self.run_episode(render, frame_delay)
-            self.rewards.append(reward)
-            greatest_reward = max(greatest_reward, reward)
-            learning_rate = 1/100
-            if average_reward is None: average_reward = 0
-            average_reward = average_reward*(1-learning_rate) + reward*(learning_rate)
-            episode_count += 1
-            if episode_count % 10 == 0:
-                print("Episode: %d/%d, Reward: %f, Best: %f, Average: %f" % (episode_count, total_episodes, reward, greatest_reward, average_reward))
-
-            # Render every n episodes
-            if render_interval != 0 and episode_count % render_interval == 0:
+        self.smoothing = 10
+        episode_count = 0
+        while(step_count < target_steps):
+            if render_interval != 0 and episode_count % render_interval == 0: # Render every n episodes
                 print(f"Render ON. Attempt: {episode_count} Greatest Reward so far: {greatest_reward}")
                 render = True
             else:
-                # print(f"Render OFF. Attempt: {episode_count} Greatest Reward so far: {greatest_reward}")
                 render = False
 
-            # if episode_count % 1000 == 0:
-            #     self.agent.save_agent_memory(agent_file_path)
-            #     self.save_run_history(history_file_path)
-        return average_reward
+            episode_count += 1
+            step_increment, reward = self.run_episode(render, frame_delay)
+            self.rewards.append(reward)
+            greatest_reward = max(greatest_reward, reward)
+            step_count += step_increment
+            if episode_count % 10 == 0: # TODO: this won't work anymore
+                average_reward = np.average(self.rewards[len(self.rewards)-self.smoothing:])
+                print("Episode: %d, Steps: %d/%d, Reward: %f, Best: %f, Average: %f" % (episode_count, step_count, target_steps, reward, greatest_reward, average_reward))
 
     def run_episode(self, render, frame_delay):
         """
@@ -72,12 +64,13 @@ class GymTrainer():
         self.agent.reset()
         total_reward = 0
         action = self.agent.start(self.observation)
+        step_count = 0
         while True:
+            step_count += 1
             if render:
                 time.sleep(frame_delay)
                 self.env.render()
             self.observation, reward, done, info = self.env.step(action)  # take a random action
-            # print("Observation: ", self.observation)
             total_reward += reward
 
             if (done is True):
@@ -87,7 +80,7 @@ class GymTrainer():
                 action = self.agent.step(reward, self.observation)
 
         self.env.close()
-        return total_reward
+        return step_count, total_reward
 
     def save_run_history(self, save_path=""):
         try:
@@ -110,7 +103,7 @@ if __name__ == "__main__":
     from ToolKit.PlottingTools import PlottingTools
 
     ############### Environment Setup (and configuration of agent for env) ###############
-    env_name = 'Breakout-ram-v0' # 'MountainCar-v0', 'Breakout-v0', 'Breakout-ram-v0', etc.
+    env_name = 'MountainCar-v0' # 'MountainCar-v0', 'Breakout-v0', 'Breakout-ram-v0', etc.
 
     history_file_path = os.getcwd() + "/TrainingHistory/" + env_name
     env = gym.make(env_name)
@@ -123,10 +116,10 @@ if __name__ == "__main__":
     trainer.load_run_history(history_file_path)
 
     ############### Define Run inputs and Run ###############
-    total_episodes = 200
+    total_steps = 20000
     render_interval = 1 # 0 is never
-    frame_delay = 0.05
-    trainer.run_multiple_episodes(total_episodes, render_interval, frame_delay) # multiple runs for up to total_steps
+    frame_delay = 0.01
+    trainer.run_multiple_episodes(total_steps, render_interval, frame_delay) # multiple runs for up to total_steps
 
     # ############### Save to file and plot progress ###############
     trainer.save_run_history(history_file_path)

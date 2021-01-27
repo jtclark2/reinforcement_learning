@@ -299,7 +299,7 @@ if __name__ == "__main__":
                 trainer.load_run_history(trainer_file_path)
 
         ############### Train ###############
-        convergent_reward = trainer.run_multiple_episodes(total_episodes, render_interval)  # multiple runs for up to total_steps
+        trainer.run_multiple_episodes(total_episodes, render_interval)  # multiple runs for up to total_steps
 
         ############### Save to file and plot progress ###############
         if save:
@@ -400,13 +400,13 @@ if __name__ == "__main__":
             3) Test Q-learner algorithm, with model simulation.
         :return: None
         """
-        total_episodes = 60
+        target_steps = 10000
         render_interval = 0 # 0 is never
         config = get_mountain_car_configuration()
         config['tile_resolution'] = np.array([8, 8])   # Just speeding things up a bit
         config['num_tilings'] = 8
         config['alpha'] = 1/4
-        agent, trainer = setup_and_train(config, total_episodes, render_interval)
+        agent, trainer = setup_and_train(config, target_steps, render_interval)
         convergent_reward = np.average(trainer.rewards[-20:])
         assert convergent_reward > -180 # I've seen about -160 on ave
         print(f"test__mountain_car_q_learner converged to {convergent_reward} in {len(trainer.rewards)} episodes!")
@@ -422,17 +422,17 @@ if __name__ == "__main__":
         consistent pace of learning.
         :return: None
         """
-        total_episodes = 100
+        target_steps = 10000
         render_interval = 0  # 0 is never
         thresh = 140
         config = get_cart_pole_config()
         config['algorithm'] = TdControlAlgorithm.ExpectedSarsa
         config['model'] = None
 
-        _, trainer = setup_and_train(config, total_episodes, render_interval, load=False, save=True)
+        _, trainer = setup_and_train(config, target_steps, render_interval, load=False, save=True)
         convergent_reward = np.average(trainer.rewards[-20:])
         for i in range(1,10): # Happy to give it up to 1000 steps to converge, but it takes forever, so we can check early
-            _, trainer = setup_and_train(config, total_episodes, render_interval, load=True, save=True)
+            _, trainer = setup_and_train(config, target_steps, render_interval, load=True, save=True)
             convergent_reward = np.average(trainer.rewards[-20:])
             if convergent_reward > thresh:
                 break
@@ -447,13 +447,13 @@ if __name__ == "__main__":
             2) Test Sarsa algorithm
         :return:
         """
-        total_episodes = 200
+        target_steps = 5000
         render_interval = 0  # 0 is never
         config = get_random_walk_config()
         config['algorithm'] = TdControlAlgorithm.Sarsa
         config['model'] = None
         config['epsilon'] = 0.5
-        agent, trainer = setup_and_train(config, total_episodes, render_interval)
+        agent, trainer = setup_and_train(config, target_steps, render_interval)
         convergent_reward = np.average(trainer.rewards[-20:])
         assert convergent_reward > .8
         print(f"test__sarsa_walk converged to {convergent_reward} in {len(trainer.rewards)} episodes!")
@@ -475,8 +475,8 @@ if __name__ == "__main__":
             know anymore than you do speeds things up a bit, but your both making similar mistakes.
         :return: None
         """
-        train_episodes = 100
-        test_episodes = 20
+        train_target_steps = 10000
+        test_target_steps = 3000
         render_interval = 0 # 0 is never
         config = get_mountain_car_configuration()
         config['tile_resolution'] = np.array([8, 8])   # Just speeding things up a bit
@@ -484,29 +484,24 @@ if __name__ == "__main__":
         config['alpha'] = 1/4
         config['off_policy_agent'] = EnergyPumpingMountainCarAgent()
         config['epsilon'] = 0.0 # do your best!
-        # initialize pessimistically...discourages exploration, but encourages mimicking off-policy approach
-        # config['initial_value'] = 0
-        agent, trainer = setup_and_train(config, train_episodes, render_interval, save=True) # Train off-policy
-        PlottingTools.plot_action_value_2d(agent.value_approximator)
+        agent, trainer = setup_and_train(config, train_target_steps, render_interval, save=True) # Train off-policy
 
         config['off_policy_agent'] = None
-        render_interval = 20 # 0 is never
-        agent, trainer = setup_and_train(config, test_episodes, render_interval, load=True) # Run for test
+        agent, trainer = setup_and_train(config, test_target_steps, render_interval, load=True) # Run for test
         convergent_reward = np.average(trainer.rewards[-10:])
         assert convergent_reward > -170 # I've seen about -150 on ave
         print(f"test__off_policy_q_learner converged to {convergent_reward} in {len(trainer.rewards)} episodes!")
-        PlottingTools.plot_action_value_2d(agent.value_approximator)
 
 
     def tests__all_semi_gradient():
-        test__off_policy_q_learner
+        test__off_policy_q_learner()
         test__mountain_car_q_learner()
         test__expected_sarsa_cart_pole()
         test__sarsa_walk()
         print("All SemiGradientTdAgent tests passed!")
 
     ############### Environment Setup (and configuration of agent for env) ###############
-    total_episodes = 300
+    target_steps = 15000
     render_interval = 0 # 0 is never
 
     env_selection = "Test"
@@ -520,7 +515,7 @@ if __name__ == "__main__":
         tests__all_semi_gradient()
     else:
         config = configs[env_selection]()
-        agent, trainer = setup_and_train(config, total_episodes, render_interval)
+        agent, trainer = setup_and_train(config, target_steps, render_interval)
 
         if plot:
             PlottingTools.plot_smooth(trainer.rewards)
