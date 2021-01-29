@@ -49,3 +49,29 @@ class PlottingTools:
     def multiline_plot(cls, x, y1, y2):
         plt.plot(x, y1, 'r', x, y2, 'b')
         plt.show()
+
+if __name__ == "__main__":
+    import numpy as np
+    import matplotlib.pyplot as plt
+
+    # Presetting the axes may help a bit, but both scatter and plot have the same issue - painter's problem.
+    # Fine for live-ish updates, but you'll want to slow it down for larger data, or decimate, or switch to window of
+    # last x results...
+    # matplotlib has an animation library for higher performance operations
+
+    # # plt.axis([0, 10, 0, 1])
+    # for i in range(10):
+    #     y = np.random.random()
+    #     plt.scatter(i, y)
+    #     plt.pause(0.05)
+    #
+    index = []
+    value = []
+    decimation = 10
+    for i in range(1000):
+        if i % decimation == 0:
+            index.append(i)
+            value.append(np.random.random())
+            plt.plot(index, value, 'g')
+            plt.pause(0.0000001)
+    plt.show()
