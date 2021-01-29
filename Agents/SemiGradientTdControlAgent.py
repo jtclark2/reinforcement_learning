@@ -3,7 +3,6 @@ Still getting my head around all the different agents. I fully expect to refacto
 I'm not sure what methods/hierarchy I'll be using yet.
 
 TODO:
- - Dyna Q and Dyna Q +
  - Improve initialization
 """
 
@@ -20,7 +19,7 @@ class TdControlAlgorithm(Enum):
     Sarsa = 2
     ExpectedSarsa = 3
 
-class SemiGradientTdAgent:
+class SemiGradientTdControlAgent:
     """
     This agent implements QLearning and SARSA.
     """
@@ -57,6 +56,22 @@ class SemiGradientTdAgent:
         if self.algorithm != TdControlAlgorithm.QLearner and \
                 (self.off_policy_agent is not None or self.model is not None):
             raise Exception("'Off_policy_agent' and 'model' should only be used ith 'algorithm' = QLearner.")
+
+
+        """
+        I don't have any true continuing problems, so it's difficult to really assess this technique. The cart problem
+        does reasonably well, since it has positive rewards, which are similar to continuing problems, but still
+        doesn't really differentiate rewards based on continuing results (just 1 for every step, which is longer in
+        an episodic scenario). Basically, it works, but I need more context to deepen my understanding.
+        Also, I added in a term for the end() case, which doesn't really make sense. Used on the mountain-car problem,
+        it gets wierd, and I don't understand it. The cart find it's way to the goal, and then just hovers right in 
+        front of it, not crossing. I would have thught that not having the next_value term, a negative value, would lead
+        to a high value in the adjascent states, just as in the traditional formulation...but nope. It doesn't work out
+        that way when subtracting off the average reward."""
+        self.use_average_reward = agent_info.get("use_average_reward", False)
+        if self.use_average_reward:
+            self.average_reward = -1
+            self.beta = 0.001
 
     def reset(self, agent_info={}):
         """
@@ -166,8 +181,12 @@ class SemiGradientTdAgent:
             raise Exception("Invalid algorithm selected for TD Control Agent: %s. Select from TdControlAlgorithm enum.")
         # TODO: implement average reward
         # TODO: Implement that other normalization of deviation thing, is that what REINFORCE is?
-        # delta -= self.average_reward
-        # self.average_reward = self.average_reward + self.beta*delta
+        if self.use_average_reward:
+            delta -= self.average_reward
+            self.average_reward += self.beta*delta
+            # if np.random.random() < 0.001:
+            #     print(self.average_reward)
+            #     print(delta)
         self.value_approximator.update_weights(delta * self.alpha, previous_state, previous_action)
 
         # EXPERIMENTAL correction to semi-gradient descent, making it true gradient descent
@@ -197,6 +216,9 @@ class SemiGradientTdAgent:
         """
         previous_action_value = self.value_approximator.get_value(self.previous_state, self.previous_action)
         delta =  reward - previous_action_value
+        if self.use_average_reward:
+            delta -= self.average_reward
+            self.average_reward += self.beta*delta
         self.value_approximator.update_weights(delta, self.previous_state, self.previous_action)
 
     def message(self):
@@ -250,6 +272,7 @@ if __name__ == "__main__":
     from Agents.EnergyPumpingMountainCarAgent import EnergyPumpingMountainCarAgent
     import gym
 
+
     def setup_and_train(config, total_episodes = 100, render_interval = 0, load = False, save = False):
         # Unpack config
         state_boundaries = config['state_boundaries']
@@ -265,6 +288,7 @@ if __name__ == "__main__":
         off_policy_agent = config['off_policy_agent']
         algorithm = config['algorithm']
         initial_value = config['initial_value']
+        use_average_reward = config['use_average_reward']
 
         ############### Create And Configure Agent ###############
         approximator = TileCodingStateActionApproximator.TileCodingStateActionApproximator(
@@ -282,9 +306,10 @@ if __name__ == "__main__":
                       "algorithm": algorithm,
                       "state_action_value_approximator": approximator,
                       "off_policy_agent": off_policy_agent,
-                      "model": model
+                      "model": model,
+                      "use_average_reward": use_average_reward,
                       }
-        agent = SemiGradientTdAgent(agent_info)
+        agent = SemiGradientTdControlAgent(agent_info)
 
         ############### Create Trainer ###############
         trainer = GymTrainer.GymTrainer(env, agent)
@@ -323,8 +348,8 @@ if __name__ == "__main__":
 
         ### Hyperparameters ###
         # 8 to 32 is reasonable. > 32 adds very little, and gets expensive
-        config['tile_resolution'] = np.array([32, 32])
-        config['num_tilings'] = 32
+        config['tile_resolution'] = np.array([8, 8])
+        config['num_tilings'] = 8
         config['epsilon'] = 0.1  # between 0 - 0.1 is pretty reasonable for this problem
         config['gamma'] = 1  # discount factor - pretty much always 1 for this problem, since it's episodic
         config['alpha'] = 1 / (2 ** 1)  # learning rate: anywhere from 1 (high, but it works) to 1/16 work well
@@ -332,6 +357,7 @@ if __name__ == "__main__":
         config['off_policy_agent'] = None
         config['algorithm'] = TdControlAlgorithm.QLearner
         config['initial_value'] = 0.0
+        config['use_average_reward'] = False
 
         return config
 
@@ -358,6 +384,7 @@ if __name__ == "__main__":
         config['off_policy_agent'] = None
         config['algorithm'] = TdControlAlgorithm.QLearner
         config['initial_value'] = 0.0
+        config['use_average_reward'] = False
 
         return config
 
@@ -385,6 +412,7 @@ if __name__ == "__main__":
         config['off_policy_agent'] = None
         config['algorithm'] = TdControlAlgorithm.QLearner
         config['initial_value'] = 0.0
+        config['use_average_reward'] = False
 
         return config
 
@@ -461,7 +489,8 @@ if __name__ == "__main__":
     def test__off_policy_q_learner():
         """
         Purpose:
-            1) Test off-policy learning.
+            1) Test off-policy learning. (Although the process is statistical, there is enough buffer that it should
+                pass almost every time.)
         Note (kind of cool):
             I've seen the best performance with policies that finish, but aren't that great
             (eg: EnergyPumpingMountainCarAgent with epsilon = 0.5).
@@ -476,7 +505,7 @@ if __name__ == "__main__":
         :return: None
         """
         train_target_steps = 10000
-        test_target_steps = 3000
+        test_target_steps = 5000
         render_interval = 0 # 0 is never
         config = get_mountain_car_configuration()
         config['tile_resolution'] = np.array([8, 8])   # Just speeding things up a bit
@@ -489,9 +518,9 @@ if __name__ == "__main__":
         config['off_policy_agent'] = None
         agent, trainer = setup_and_train(config, test_target_steps, render_interval, load=True) # Run for test
         convergent_reward = np.average(trainer.rewards[-10:])
+        print("Reward: ", convergent_reward)
         assert convergent_reward > -170 # I've seen about -150 on ave
         print(f"test__off_policy_q_learner converged to {convergent_reward} in {len(trainer.rewards)} episodes!")
-
 
     def tests__all_semi_gradient():
         test__off_policy_q_learner()
@@ -501,22 +530,28 @@ if __name__ == "__main__":
         print("All SemiGradientTdAgent tests passed!")
 
     ############### Environment Setup (and configuration of agent for env) ###############
-    target_steps = 15000
+    # TODO: My cleanup attempt just turned into a different mess...Make functions to create each object (or streamline
+    # the __init__ they already have. Basically just replace the monolith config dict that breaks into different dicts
+    # You probably want: a single call to create_env, create_agent, create_approximator, create_model, and then leave
+    # the actual load and running in setup_and_train, but without all the setup. Just load and train.
+    target_steps = 30000
     render_interval = 0 # 0 is never
 
-    env_selection = "Test"
-    mode = "Test" # "Test", "Manual", "Normal"
+    env_selection = "mountain_car"
+    test = False
     plot = True
     configs = {"mountain_car": get_mountain_car_configuration,
                "cart_pole": get_cart_pole_config,
                "random_walk": get_random_walk_config}
 
-    if mode == "Test":
+    if test:
         tests__all_semi_gradient()
     else:
         config = configs[env_selection]()
-        agent, trainer = setup_and_train(config, target_steps, render_interval)
-
+        config['use_average_reward'] = False
+        config['alpha'] = 1/(2**2)
+        agent.model.simulation_frequency = 100000
+        agent, trainer = setup_and_train(config, target_steps, render_interval, save=True, load=True)
         if plot:
             PlottingTools.plot_smooth(trainer.rewards)
 

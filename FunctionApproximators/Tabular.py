@@ -6,9 +6,9 @@ simple enough problem. I've been working with continuous spaces so far, not tabu
 from FunctionApproximators import AbstractFunctionApproximator
 import numpy as np
 
-class TileCodingStateActionApproximator:
+class TabularApproximator:
 
-    def __init__(self, env_name, num_actions, num_states):
+    def __init__(self, env_name, num_actions, num_states, initial_value = 0.0):
         """
         Initializes the tabular Function 'Approximator'. This actually is a perfect representation, rather than an
         approximation. This is the simplified tabular case, which just

@@ -1,3 +1,11 @@
+# TODO: Just learned this is actually called a non-parametric model...apparently I created something very close
+# to what the literature calls a replay buffer. Kind of cool! Anyways, might adjust a few naming conventions, since
+# Deterministic isn't really the key identifier for this model. There was a note about this in the class homework:
+# Course4, Assignment 2, Section 3...
+# TODO: Fix terminal transitions. I treat terminal transitions incorrectly, just like any other transition, because
+# my model literally doesn't capture the terminal/done field right now. And for that matter, I don't actually record
+# terminal transitions...so at least it's consistent. Still, room for improvement.
+
 import random
 import numpy as np
 import time

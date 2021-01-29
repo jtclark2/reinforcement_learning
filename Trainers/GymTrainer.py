@@ -5,6 +5,7 @@ import numpy as np
 
 # TODO: Pass in a reward shaping function...I know it's frowned upon, beause we all want fully generalized AI,
 # but it is a practical tool that should not be overlooked
+# TODO: Formalize interfaces / abstract classes
 class GymTrainer():
     """
     This class works with Gym environment to train agents.
@@ -92,7 +93,7 @@ class GymTrainer():
     def load_run_history(self, load_path=""):
         if os.path.isfile(load_path):
             self.rewards = pickle.load(open(load_path, "rb"))
-            print("Loaded run history. Current step length: ", len(self.rewards) )
+            print("Loaded run history. Current episode count: ", len(self.rewards) )
         else:
             print("Warning: Unable to load training_history. Program will proceed without loading.")
             time.sleep(2)

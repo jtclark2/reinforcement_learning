@@ -41,7 +41,7 @@ class TileCodingStateActionApproximator:
         self._iht = tc.IHT(self._total_possible_tiles)
 
         # Consider generalizes this in the future. This is optimistic for anything < 1.
-        self._weights = np.ones((self.num_actions, self._total_possible_tiles)) * initial_value # TODO: pass in initial values
+        self._weights = np.ones((self.num_actions, self._total_possible_tiles)) * initial_value
 
     def get_values(self, state):
         """
