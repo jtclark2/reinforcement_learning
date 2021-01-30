@@ -12,6 +12,12 @@ class EnergyPumpingMountainCarAgent:
         self.epsilon = 0.5
         self.num_actions = 3
 
+    def reset(self):
+        self.vel = 0
+        self.pos = 0
+        self.last_action = 0
+
+
     def select_action(self, state):
         _, vel = state
         if np.random.random() < self.epsilon:

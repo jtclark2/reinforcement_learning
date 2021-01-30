@@ -1,7 +1,7 @@
 import numpy as np
 
 # Initial conditions
-class Averager:
+class Smoother:
     def __init__(self):
         # initialize to 0. Wouldn't make sense to have momentum before we start
         self.param = 0
@@ -34,7 +34,7 @@ class Averager:
     def average_entire_list(self, vector, full_range=None):
         if full_range is None:
             full_range = 1 / (1 - self.b)
-            half_range = int(full_range // 2)  # [-1/2 range, +1/2 range]
+        half_range = int(full_range // 2)  # [-1/2 range, +1/2 range]
         average = [np.average(vector[max(i - half_range, 0):min(i + half_range, len(vector))]) for i, _ in
                    enumerate(vector)]
         return average
@@ -45,7 +45,7 @@ class Averager:
 if __name__ == "__main__":
     from matplotlib import pyplot as plt
     import random
-    opt = Averager()
+    opt = Smoother()
     index = [i for i in range(100)]
     actual = [random.random() * 10]
     for i in range(99):

@@ -3,11 +3,12 @@ This contains a handful of plotting tools, using matplotlib. Nothing revolutiona
 """
 import numpy as np
 import matplotlib.pyplot as plt
+from ToolKit.Smoother import Smoother
 
 class PlottingTools:
 
     @classmethod
-    def plot_action_value_2d(cls, value_approximator, resolution=50):
+    def plot_action_value_2d(cls, value_approximator, resolution=50, silent=False):
         min1 = value_approximator._state_boundaries[0][0]
         max1 = value_approximator._state_boundaries[0][1]
         step_size_1 = (max1-min1)/resolution
@@ -31,19 +32,27 @@ class PlottingTools:
         fig = plt.figure()
         ax = fig.add_subplot(111, projection='3d')
         ax.plot_wireframe(variable1, variable2, value)
-        plt.show()
+        if silent:
+            plt.pause(0.0000001)
+        else:
+            plt.show()
 
     @classmethod
-    def plot_smooth(cls, results, smoothing = 100):
-        smoothing = min(len(results)//2, smoothing)
-        running_avg = [np.average(results[x:x+smoothing]) for x, _ in enumerate(results[:-smoothing])]
-        x_axis = np.array([x for x, _ in enumerate(results)])
-        plt.figure(figsize=(12, 8), dpi=80, facecolor='w', edgecolor='k')
-        plt.plot(running_avg)
+    def plot_smooth(cls, results, smoothing = 100, silent=False):
+        # smoothing = min(len(results)//2, smoothing)
+        # running_avg = [np.average(results[x:x+smoothing]) for x, _ in enumerate(results[:-smoothing])]
+        smoother = Smoother()
+        smooth = smoother.average_entire_list(results, full_range=smoothing)
+        # plt.figure(figsize=(12, 8), dpi=80, facecolor='w', edgecolor='k')
+        plt.plot(smooth)
         plt.xlabel("Episode")
         plt.ylabel("Average Reward per Episode")
         plt.yscale("linear")
-        plt.show()
+        if silent:
+            plt.pause(0.0000001)
+        else:
+            plt.show()
+
 
     @classmethod
     def multiline_plot(cls, x, y1, y2):
