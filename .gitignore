@@ -49,5 +49,5 @@ Thumbs.db
 *.wmv
 
 # Agent Training Records (this change every time I test an agent or env)
-TrainingHistory/*
-Agents/AgentMemory/*
+*/TrainingHistory/*
+*/Agents/AgentMemory/*
