@@ -2,7 +2,7 @@ import numpy as np
 
 class InertAgent:
     """
-    Use this to test new environments. It will always output action 0.
+    Use this to test new environments. A sort of "Hello World" agent. It will always output action 0.
     """
 
     def __init__(self):

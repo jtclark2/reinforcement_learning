@@ -68,7 +68,7 @@ class MonteCarloQAgent:
         Remains public due to off-policy learning applications.
         :return:
         """
-        action_values = self.value_approximator.get_values(state)
+        action_values = self.value_approximator.get_action_values(state)
 
         if np.random.random() < self.epsilon:
             chosen_action = np.random.choice(self.num_actions)  # randomly explore
@@ -103,7 +103,7 @@ class MonteCarloQAgent:
             i += 1
             # r, state, action = step
             g = r + self.gamma * g
-            delta = self.alpha*(g - self.value_approximator.get_value(state, action))
+            delta = self.alpha*(g - self.value_approximator.get_action_value(state, action))
             # Error function and gradient and bundled into the approximator
             self.value_approximator.update_weights(delta, state, action)
 
@@ -234,6 +234,6 @@ if __name__ == "__main__":
 
     if env_name == 'RandomWalk_v0':
         x = [x for x in range(1000)]
-        y_estimate = [np.average(agent.value_approximator.get_values(np.array([x]))) for x in range(1000)]
+        y_estimate = [np.average(agent.value_approximator.get_action_values(np.array([x]))) for x in range(1000)]
         y_actual = [ (x-500)/500 for x in range(1000)]
         PlottingTools.multiline_plot(x, y_estimate, y_actual)
