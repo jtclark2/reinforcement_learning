@@ -43,21 +43,6 @@ class TileCodingStateActionApproximator:
         # Consider generalizes this in the future. This is optimistic for anything < 1.
         self._weights = np.ones((self.num_actions, self._total_possible_tiles)) * initial_value
 
-    def get_values(self, state):
-        """
-        Although the parent method works fine, this is slightly more optimized. Gets values for all actions.
-        :param state:
-        :return:
-        """
-        features = self._get_active_tiles(state)
-        action_values = np.sum(self._weights[:, features], axis=1)
-        return action_values
-
-    def get_value(self, state, action):
-        features = self._get_active_tiles(state)
-        action_value = np.sum(self._weights[action, features])
-        return action_value
-
     def _get_gradient(self, state = None, action = None):
         """
         Gets the dense representation of the gradient, corresponding to the [action, state_activations].
@@ -116,6 +101,21 @@ class TileCodingStateActionApproximator:
         tiles = tc.tiles(self._iht, self._num_tilings, scaled_state)
         return np.array(tiles)
 
+    def get_action_values(self, state):
+        """
+        Although the parent method works fine, this is slightly more optimized. Gets values for all actions.
+        :param state:
+        :return:
+        """
+        features = self._get_active_tiles(state)
+        action_values = np.sum(self._weights[:, features], axis=1)
+        return action_values
+
+    def get_action_value(self, state, action):
+        features = self._get_active_tiles(state)
+        action_value = np.sum(self._weights[action, features])
+        return action_value
+
     def check_config_match(self, approximator):
         """
         Does this configuration match an externally provided config?
@@ -126,12 +126,15 @@ class TileCodingStateActionApproximator:
         :return:
         """
 
-        env_name = np.all(self.env_name == approximator.env_name)
+        env_name = np.all(self.env_name == approximator.env_name) # TODO: np.all shouldn't be needed
         bound = np.all(self._state_boundaries == approximator._state_boundaries)
         res = np.all(self._tile_resolution == approximator._tile_resolution)
         num = self._num_tilings == approximator._num_tilings
         return bound and res and num and env_name
 
+    # TODO: This is similar to optimize_network(experiences, discount, optimizer, network, current_q, tau),
+    # but I'm Not sure this makes sense in general...this update assumes SGD optimization,
+    # rather than using an optimizer object (that could implement Adam, or another efficient approach)
     def update_weights(self, delta, state, action):
         """
         Handles updating the weights that estimate the Value function. Z

@@ -7,6 +7,7 @@ from ToolKit.PlottingTools import PlottingTools
 
 # TODO: Pass in a reward shaping function...I know it's frowned upon, beause we all want fully generalized AI,
 # but it is a practical tool that should not be overlooked
+# TODO: State Shaping. Similar to reward shaping, there are states in which expert knowledge can simplify the problem
 # TODO: Formalize interfaces / abstract classes
 class GymTrainer():
     """
@@ -20,8 +21,14 @@ class GymTrainer():
         self.agent = agent
         self.episode_count = 0
         self.plotter = PlottingTools()
+        self.smoothing = 10
 
-    def run_multiple_episodes(self, target_steps, render_interval, frame_delay=0.01, history_file_path=None, save=False ):
+    def run_multiple_episodes(self,
+                              target_steps,
+                              render_interval,
+                              frame_delay=0.01,
+                              save_info={"save": False},
+                              live_plot=False):
         """
         This may need to rethinking with regard to termination condition...we may want more flexibility than a fixed
         number of steps in more advanced situations.
@@ -33,12 +40,15 @@ class GymTrainer():
         :return: None
         """
         step_count = 0
-        greatest_reward = float("-inf")
+        if len(self.rewards) == 0:
+            greatest_reward = float("-inf")
+        else:
+            greatest_reward = max(self.rewards)
         start_time = datetime.now()
-        self.smoothing = 10
+        previous_update_time = 0
         while(step_count < target_steps):
             if render_interval != 0 and self.episode_count % render_interval == 0: # Render every n episodes
-                print(f"Render ON. Attempt: {self.episode_count} Greatest Reward so far: {greatest_reward}")
+                # print(f"Render ON. Attempt: {self.episode_count} Greatest Reward so far: {greatest_reward}")
                 render = True
             else:
                 render = False
@@ -48,23 +58,29 @@ class GymTrainer():
             self.rewards.append(reward)
             greatest_reward = max(greatest_reward, reward)
             step_count += step_increment
-            if self.episode_count % 1 == 0: # TODO: this won't work anymore
-                average_reward = np.average(self.rewards[len(self.rewards)-self.smoothing:])
-                print("Episode: %d, Steps: %d/%d, Reward: %f, Best: %f, Average: %f" % (self.episode_count, step_count, target_steps, reward, greatest_reward, average_reward))
-                # end_time = time.time()
-                PlottingTools.plot_smooth(self.rewards, silent=True)
-                # start_time, end_time = end_time, time.time()
-                # print(f"Plotting took: {end_time-start_time} seconds")
-                if save:
-                    self.save_run_history(history_file_path) # TODO: pas in save arg, this should be conditional
-                    # start_time, end_time = end_time, time.time()
-                    # print(f"Saving took: {end_time-start_time} seconds")
+
+            if time.time() - previous_update_time > 10:
+                smoothing = min(self.smoothing, len(self.rewards)//2)
+                previous_update_time = time.time()
+                # TODO: This is a mess now - use the same averaging approach as ADAM (1/(1-b))
+                if len(self.rewards) > 1:
+                    average_reward = np.average(self.rewards[len(self.rewards)-smoothing:])
+                else:
+                    average_reward = reward
+                if live_plot:
+                    PlottingTools.plot_smooth(self.rewards, smoothing=smoothing, silent=True)
+                if save_info["save"]:
+                    self.save_run_history(save_info["training_history_path"])
+                    self.agent.save(save_info["agent_memory_path"], print_confirmation=False)
                 current_time = datetime.now()
                 time_per_step = (current_time-start_time)/step_count
                 steps_remaining = target_steps-step_count
                 time_remaining = steps_remaining*time_per_step
-
-                print(f"Current Time: {current_time}...Projected Completion Time: {current_time + time_remaining}... Time remaining: {time_remaining} seconds")
+                print_friendly_time_remaining = str(time_remaining).split('.', 2)[0] # just shaving off ms noise
+                # print("Episode: %d, Steps: %d/%d, Reward: %f, Best: %f, Average: %f" % (self.episode_count, step_count, target_steps, reward, greatest_reward, average_reward))
+                # print(f"Current Time: {current_time} | Projected Completion Time: {current_time + time_remaining} | Time remaining: {time_remaining} seconds")
+                print(f"Episode: {self.episode_count} | Steps: {step_count}/{target_steps} | "
+                      f"Ave Reward: {average_reward} | Time Remaining: {print_friendly_time_remaining}")
 
         print("###################### TRAINING COMPLETE ######################")
 
@@ -103,10 +119,11 @@ class GymTrainer():
         self.env.close()
         return step_count, total_reward
 
-    def save_run_history(self, save_path=""):
+    def save_run_history(self, save_path="", print_confirmation=False):
         try:
             pickle.dump(self.rewards, open(save_path, "wb"))
-            print("Saved training history to: ", save_path)
+            if print_confirmation:
+                print("Saved training history to: ", save_path)
         except:
             print("Unable to save run history to: ", save_path)
 
@@ -121,49 +138,32 @@ class GymTrainer():
 
 if __name__ == "__main__":
     import gym
-    from Agents import HumanAgent, InertAgent, NNAgent
+    from Agents import HumanAgent, SingleActionAgent, NNAgent
     from ToolKit.PlottingTools import PlottingTools
 
     ############### Environment Setup (and configuration of agent for env) ###############
-    # env_name = 'MountainCar-v0' # 'MountainCar-v0', 'Breakout-v0', 'Breakout-ram-v0', etc.
-    env_name = 'LunarLander-v2'
-
+    env_name = 'LunarLander-v2' # 'MountainCar-v0', 'LunarLander-v2', 'Breakout-v0', 'Breakout-ram-v0', etc.
     history_file_path = os.getcwd() + "/TrainingHistory/" + env_name
     env = gym.make(env_name)
 
     ############### Instantiate and Configure Agent ###############
-    # agent = HumanAgent.HumanAgent({"env":env})
-    # agent = InertAgent.InertAgent()
-    agent_parameters = {
-        'network_config': {
-            'state_dim': 8,
-            'num_hidden_units': 256,
-            'num_actions': 4
-        },
-        'optimizer_config': {
-            'step_size': 1e-3,
-            'beta_m': 0.9,
-            'beta_v': 0.999,
-            'epsilon': 1e-8
-        },
-        'replay_buffer_size': 50000,
-        'minibatch_sz': 8,
-        'num_replay_updates_per_step': 4,
-        'gamma': 0.99,
-        'tau': 0.001
-    }
-    agent = NNAgent.Agent(agent_parameters)
+    agent = SingleActionAgent.SingleActionAgent(action=0) # Note that inert agent always sends 0, which is inert in some environments,
 
     ############### Trainer Setup (load run history) ###############
     trainer = GymTrainer(env, agent)
     trainer.load_run_history(history_file_path)
 
     ############### Define Run inputs and Run ###############
-    total_steps = 20000
-    render_interval = 1 # 0 is never
-    frame_delay = 0.01
-    trainer.run_multiple_episodes(total_steps, render_interval, frame_delay, history_file_path=history_file_path, save=False) # multiple runs for up to total_steps
+    save_info = {"save": True,
+                 "training_history_path": history_file_path,
+                 "agent_memory_path": None}
+
+    trainer.run_multiple_episodes(target_steps=500,
+                                  render_interval=1,
+                                  frame_delay=0.01,
+                                  save_info=save_info,
+                                  live_plot=False)
 
     # ############### Save to file and plot progress ###############
-    trainer.save_run_history(history_file_path)
+    trainer.save_run_history(history_file_path) # Included for testing (but it's going to be a boring history)
     PlottingTools.plot_smooth(trainer.rewards, silent=False)

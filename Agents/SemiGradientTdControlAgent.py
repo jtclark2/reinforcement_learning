@@ -86,7 +86,7 @@ class SemiGradientTdControlAgent:
         Remains public due to off-policy learning applications.
         :return:
         """
-        action_values = self.value_approximator.get_values(state)
+        action_values = self.value_approximator.get_action_values(state)
 
         if np.random.random() < self.epsilon:
             chosen_action = np.random.choice(self.num_actions)  # randomly explore
@@ -101,7 +101,7 @@ class SemiGradientTdControlAgent:
         policy = np.ones((self.num_actions))*self.epsilon/self.num_actions
 
         # Greedy
-        action_values = self.value_approximator.get_values(state)
+        action_values = self.value_approximator.get_action_values(state)
         greedy_choices = RLHelpers.all_argmax(action_values) # technically
         policy[greedy_choices] += (1 - self.epsilon)/len(greedy_choices)
 
@@ -139,7 +139,7 @@ class SemiGradientTdControlAgent:
         self._update_q(self.previous_state, self.previous_action, reward, state, next_action)
 
         if self.model is not None:
-            self.model.record_transition(self.previous_state, self.previous_action, reward, state)
+            self.model.append_transition(self.previous_state, self.previous_action, reward, state)
             self.model.simulate(self._update_q) # learn by simulating previous experience
 
         self.previous_state = state
@@ -165,17 +165,17 @@ class SemiGradientTdControlAgent:
 
         :return:
         """
-        previous_action_value = self.value_approximator.get_value(previous_state, previous_action)
+        previous_action_value = self.value_approximator.get_action_value(previous_state, previous_action)
         # Update equation
         if self.algorithm == TdControlAlgorithm.QLearner:
-            action_values = self.value_approximator.get_values(state)
+            action_values = self.value_approximator.get_action_values(state)
             optimal_next_value = action_values.max()
             delta = reward + self.gamma * optimal_next_value - previous_action_value
         elif self.algorithm == TdControlAlgorithm.Sarsa:
-            next_action_value = self.value_approximator.get_value(state, next_action)
+            next_action_value = self.value_approximator.get_action_value(state, next_action)
             delta = reward + self.gamma * next_action_value - previous_action_value
         elif self.algorithm == TdControlAlgorithm.ExpectedSarsa:
-            action_values = self.value_approximator.get_values(state)
+            action_values = self.value_approximator.get_action_values(state)
             delta = reward + self.gamma * np.sum(self._get_policy(state) * action_values) - previous_action_value
         else:
             raise Exception("Invalid algorithm selected for TD Control Agent: %s. Select from TdControlAlgorithm enum.")
@@ -214,7 +214,7 @@ class SemiGradientTdControlAgent:
         :param reward: Reward gained for action taken
         :return: None
         """
-        previous_action_value = self.value_approximator.get_value(self.previous_state, self.previous_action)
+        previous_action_value = self.value_approximator.get_action_value(self.previous_state, self.previous_action)
         delta =  reward - previous_action_value
         if self.use_average_reward:
             delta -= self.average_reward
@@ -224,7 +224,7 @@ class SemiGradientTdControlAgent:
     def message(self):
         pass
 
-    def save_agent_memory(self, save_path):
+    def save(self, save_path, print_confirmation=True):
         """
         Save out any/all information the agent needs to remember to perform well. Effectively, all that it has learned.
         This generally consists of function approximators (value, action-value, policy). This does not include current
@@ -236,11 +236,12 @@ class SemiGradientTdControlAgent:
         """
         try:
             pickle.dump(self.value_approximator, open(save_path, "wb"))
-            print("Agent memory saved to: ", save_path)
+            if print_confirmation:
+                print("Agent memory saved to: ", save_path)
         except:
             print("Unable to save agent memory to specified directory: %s " % save_path)
 
-    def load_agent_memory(self, load_path):
+    def load(self, load_path):
 
         if os.path.isfile(load_path):
             new_value_approximator = pickle.load(open(load_path, "rb"))
@@ -273,7 +274,7 @@ if __name__ == "__main__":
     import gym
 
 
-    def setup_and_train(config, total_episodes = 100, render_interval = 0, load = False, save = False):
+    def setup_and_train(config, total_steps = 100, render_interval = 0, load = False, save = False):
         # Unpack config
         state_boundaries = config['state_boundaries']
         env = config['env']
@@ -316,19 +317,33 @@ if __name__ == "__main__":
 
         ############### Load prior experience/history ###############
         agent_file_path = os.getcwd() + r"/AgentMemory/Agent_%s_%s.p" % (agent.name, env_name)
-        trainer_file_path = os.getcwd() + r"/../TrainingHistory/History_%s_%s.p" % (agent.name, env_name)
+        trainer_file_path = os.getcwd() + r"/../Trainers/TrainingHistory/History_%s_%s.p" % (agent.name, env_name)
         if load:
 
-            load_status = agent.load_agent_memory(agent_file_path)
+            load_status = agent.load(agent_file_path)
             if (load_status):
                 trainer.load_run_history(trainer_file_path)
 
         ############### Train ###############
-        trainer.run_multiple_episodes(total_episodes, render_interval)  # multiple runs for up to total_steps
+        save_info = {"save": True,
+                     "training_history_path": trainer_file_path,
+                     "agent_memory_path": agent_file_path}
 
+        trainer.run_multiple_episodes(target_steps=total_steps,
+                                      render_interval=render_interval,
+                                      save_info=save_info,
+                                      live_plot=True)
+
+        # trainer.run_multiple_episodes(total_steps,
+        #                               render_interval,
+        #                               trainer_file_path,
+        #                               agent_file_path,
+        #                               save=True,
+        #                               live_plot=True
+        #                               )  # multiple runs for up to total_steps
         ############### Save to file and plot progress ###############
         if save:
-            agent.save_agent_memory(agent_file_path)
+            agent.save(agent_file_path)
             trainer.save_run_history(trainer_file_path)
 
         return agent, trainer
@@ -529,13 +544,10 @@ if __name__ == "__main__":
         test__sarsa_walk()
         print("All SemiGradientTdAgent tests passed!")
 
+
     ############### Environment Setup (and configuration of agent for env) ###############
-    # TODO: My cleanup attempt just turned into a different mess...Make functions to create each object (or streamline
-    # the __init__ they already have. Basically just replace the monolith config dict that breaks into different dicts
-    # You probably want: a single call to create_env, create_agent, create_approximator, create_model, and then leave
-    # the actual load and running in setup_and_train, but without all the setup. Just load and train.
     target_steps = 30000
-    render_interval = 0 # 0 is never
+    render_interval = 1 # 0 is never
 
     env_selection = "mountain_car"
     test = False
@@ -543,23 +555,20 @@ if __name__ == "__main__":
     configs = {"mountain_car": get_mountain_car_configuration,
                "cart_pole": get_cart_pole_config,
                "random_walk": get_random_walk_config}
+    config = configs[env_selection]()
 
-    if test:
-        tests__all_semi_gradient()
-    else:
-        config = configs[env_selection]()
-        config['use_average_reward'] = False
-        config['alpha'] = 1/(2**2)
-        agent.model.simulation_frequency = 100000
-        agent, trainer = setup_and_train(config, target_steps, render_interval, save=True, load=True)
-        if plot:
-            PlottingTools.plot_smooth(trainer.rewards)
+    config['use_average_reward'] = False
+    config['alpha'] = 1/(2**2)
+    agent, trainer = setup_and_train(config, target_steps, render_interval, save=True, load=True)
 
-            if env_selection == "mountain_car":
-                PlottingTools.plot_action_value_2d(agent.value_approximator)
+    if plot:
+        PlottingTools.plot_smooth(trainer.rewards)
 
-            if env_selection == "random_walk":
-                x = [x for x in range(1000)]
-                y_estimate = [np.average(agent.value_approximator.get_values(np.array([x]))) for x in range(1000)]
-                y_actual = [ (x-500)/500 for x in range(1000)]
-                PlottingTools.multiline_plot(x, y_estimate, y_actual)
+        if env_selection == "mountain_car":
+            PlottingTools.plot_action_value_2d(agent.value_approximator)
+
+        if env_selection == "random_walk":
+            x = [x for x in range(1000)]
+            y_estimate = [np.average(agent.value_approximator.get_action_values(np.array([x]))) for x in range(1000)]
+            y_actual = [ (x-500)/500 for x in range(1000)]
+            PlottingTools.multiline_plot(x, y_estimate, y_actual)

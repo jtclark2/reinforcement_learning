@@ -1,7 +1,9 @@
 import numpy as np
-from copy import deepcopy
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Flatten, Softmax
 
-class SingleLayerNNApproximator:
+class SingleLayerNNApproximatorTF:
     """
     As with this entire library, this is all for the sake of learning. This is effectively the impplementation of
     a 2-layer (state, hidden, actions) fully connected NN.
@@ -22,13 +24,23 @@ class SingleLayerNNApproximator:
         # Specify self.layer_size which shows the number of nodes in each layer
         self.layer_sizes = [self.state_dim, self.num_hidden_units, self.num_actions]
 
-        # Initialize the weights of the neural network
-        # self.weights is an array of dictionaries with each dictionary corresponding to
-        # the weights from one layer to the next. Each dictionary includes W and b
-        self._weights = [dict() for i in range(0, len(self.layer_sizes) - 1)]
-        for i in range(0, len(self.layer_sizes) - 1):
-            self._weights[i]['W'] = self._init_saxe(self.layer_sizes[i], self.layer_sizes[i + 1])
-            self._weights[i]['b'] = np.zeros((1, self.layer_sizes[i + 1]))
+        # Initialize model
+        self.model = Sequential([
+            Dense(self.num_hidden_units ,input_shape = (self.state_dim)),
+            Dense(self.num_actions)
+        ])
+
+        # TODO: Open question - do epochs exist in an RL agent...I don't think they would...I think we'd just turn
+        # the experience replay buffer into a dataset, which would get wrapped as an iterable, which would then get fed into
+        # the update method continuously
+
+        # TODO (should work): LR Update
+        # How do I do this? LR is going to be TD in this case...
+        # Set self.learning_rate, and then use the LearningRateSchedular, on_batch_begin (that might need to be custom)
+        # in order to update learning_rate=self.learning_rate*self.td_error, where td_error is of course being set by
+        # our agent's update
+        self.optimizer = tf.keras.optimizers.Adam(learning_rate=0.005)
+
 
     def _init_saxe(self, rows, cols):
         """

@@ -10,8 +10,7 @@ class HumanAgent:
     """
     def __init__(self, agent_info={}):
         self.name = "Human"
-        self.env = agent_info["env"]
-        self._format_key_map(self.env)
+        self._format_key_map(agent_info["key_map"]) # Many (not all) gym environments provide env.get_keys_to_action()
         # self._print_controls(env)
 
     def _print_controls(self, env):
@@ -26,7 +25,7 @@ class HumanAgent:
             print("Control mappings not provided. I'd guess arrows or WASD for movement, and space bar to fire.")
             action_meanings = ["Unknown"]* len(env.get_keys_to_action())
     #
-    def _format_key_map(self, env):
+    def _format_key_map(self, key_map):
         """
         Reformat the env.get_keys_to_action return into a more convenient format.
         {tuple(gym_key_values), action} --> ordered list of [tuple(keyboard_key_values), action]
@@ -39,8 +38,7 @@ class HumanAgent:
         :return: Dictionary of: {keyboard.keyname, env.action}
         """
 
-        keys_to_actions_dict = self.env.get_keys_to_action()
-        keys_action_pair_list = [(k,v) for k,v in keys_to_actions_dict.items()]
+        keys_action_pair_list = [(k,v) for k,v in key_map.items()]
         sorted_list_gym_keys = sorted(keys_action_pair_list, key=lambda x:len(x[0]), reverse=True)
 
         gym_to_keyboard = {276: "left",
@@ -59,16 +57,14 @@ class HumanAgent:
             self.keyboard_action_pairs.append((converted_keys, action))
 
         try:
-        # if True:
             action_meanings = env.get_action_meanings()
             i = 0
-            for keys, action in self.env.get_keys_to_action().items():
+            for keys, action in key_map.items():
                 print(f"'{[chr(key) for key in keys]}': {action_meanings[i]}, action=({action})")
                 i += 1
             print("If the key is ' ', it may just be spacebar")
         except:
-            print("Control mappings not provided. I'd guess arrows or WASD for movement, and space bar to fire.")
-            action_meanings = ["Unknown"] * len(env.get_keys_to_action())
+            print("Control mappings not provided.")
 
     def reset(self, agent_info={}):
         pass
@@ -118,31 +114,35 @@ class HumanAgent:
     def message(self):
         pass
 
-    def save_agent_memory(self, save_path):
+    def save(self, save_path, print_confirmation=False):
         pass
 
-    def load_agent_memory(self, load_path):
-        pass
+    def load(self, load_path):
+        return True
 
 if __name__ == "__main__":
     from Trainers import GymTrainer
     import gym
 
+
     ############### Environment Setup (and configuration of agent for env) ###############
-    # env_name = 'CartPole-v1'
-    env_name = 'MountainCar-v0'
+    # Set the env_name to whichever game you want to play! You may need to generate mappings for other environments
+    # env_name = 'MountainCar-v0'
+    env_name = 'LunarLander-v2' # my top score is 288. Try to beat it!
     env = gym.make(env_name)
 
+    if env_name == 'LunarLander-v2':
+        agent_info = {"key_map":{(): 0, (276,): 1, (275,): 3, (275, 276): 0, (ord(' '),): 2}}
+    else:
+        agent_info = {"key_map": env.get_keys_to_action()}
+
+    agent = HumanAgent(agent_info)
+
     ############### Create And Configure Agent ###############
-    agent_info = None
     agent = HumanAgent(agent_info)
     agent_file_path = None
-    load_status = agent.load_agent_memory(agent_file_path)
+    agent.load(agent_file_path)
 
     ############### Trainer Setup (load run history) ###############
-    trainer_file_path = None
     trainer = GymTrainer.GymTrainer(env, agent)
-    total_episodes = 1
-    max_steps = 1000
-    render_interval = 1 # # I better be able to see if I'm playing
-    trainer.run_multiple_episodes(total_episodes, max_steps, render_interval) # multiple runs for up to total_steps
+    trainer.run_multiple_episodes(target_steps=1, render_interval=1) # multiple runs for up to total_steps

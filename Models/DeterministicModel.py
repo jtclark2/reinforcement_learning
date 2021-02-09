@@ -54,7 +54,7 @@ class DeterministicModel:
             hash = (tuple(state), action, uid)
         return hash
 
-    def record_transition(self, previous_state, previous_action, reward, state):
+    def append_transition(self, previous_state, previous_action, reward, state):
         hash_key = self._get_hash(previous_state, previous_action)
         self.transition_record_list.append(hash_key)
         self.transition_record[hash_key] = (reward, state)
@@ -64,14 +64,14 @@ class DeterministicModel:
             deleted = self.transition_record_list.pop(0)
             del self.transition_record[deleted]
 
-    def select_state_action(self):
+    def sample_transition(self):
         """
         Randomly select a state-action pair.
         """
         state, action, unique_id = random.choice(self.transition_record_list)
         return np.array(state), action, unique_id
 
-    def simulate_env_step(self, previous_state, previous_action, unique_id):
+    def _simulate_env_step(self, previous_state, previous_action, unique_id):
         hash_key = self._get_hash(previous_state, previous_action, unique_id)
         return self.transition_record[hash_key]
 
@@ -79,8 +79,8 @@ class DeterministicModel:
         # learn from simulation
         for _ in range(self.simulation_frequency):
             # randomly select simulated state and action
-            sim_previous_state, sim_previous_action, unique_id = self.select_state_action()
-            sim_reward, sim_state = self.simulate_env_step(sim_previous_state, sim_previous_action, unique_id)
+            sim_previous_state, sim_previous_action, unique_id = self.sample_transition()
+            sim_reward, sim_state = self._simulate_env_step(sim_previous_state, sim_previous_action, unique_id)
             sim_next_action = None # not needed for update under Q-learning algorithm
             # Update q based on simulated values
             update_q(sim_previous_state, sim_previous_action, sim_reward, sim_state, sim_next_action)

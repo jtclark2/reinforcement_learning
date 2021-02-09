@@ -181,7 +181,7 @@ if __name__ == "__main__":
     env_name = 'RandomWalk_v0'
     state_boundaries = np.array([[0,1000]])
     tile_resolution = np.array([10])
-    env = RandomWalkEnv.RandomWalkEnv()
+    env = RandomWalkEnv.RandomWalkEnv() # Note that this env does not have a render() method
     num_tilings = 1
     epsilon = 1 # 1 # 0.01
     gamma = 1  # discount factor
@@ -211,7 +211,7 @@ if __name__ == "__main__":
     load_status = agent.load_agent_memory(agent_file_path)
 
     ############### Trainer Setup (load run history) ###############
-    trainer_file_path = os.getcwd() + r"/../TrainingHistory/History_%s_%s.p" % (agent.name, env_name)
+    trainer_file_path = os.getcwd() + r"/../Trainers/TrainingHistory/History_%s_%s.p" % (agent.name, env_name)
 
     trainer = GymTrainer.GymTrainer(env, agent)
     if(load_status):
@@ -219,9 +219,9 @@ if __name__ == "__main__":
 
 
     ############### Define Run inputs and Run ###############
-    total_episodes = 10
+    total_episodes = 1000
     max_steps = 1000
-    render_interval = 0 # 0 is never
+    render_interval = 1 # 0 is never
     frame_delay = 0.01
 
     trainer.run_multiple_episodes(total_episodes, render_interval, frame_delay)

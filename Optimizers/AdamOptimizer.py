@@ -1,5 +1,9 @@
+# TODO: Standardize/formalize interface
+
+import numpy as np
+
 ### Work Required: Yes. Fill in code in __init__ and update_weights (~9-11 Lines).
-class Adam():
+class AdamOptimizer():
     # Work Required: Yes. Fill in the initialization for self.m and self.v (~4 Lines).
     def __init__(self, layer_sizes, optimizer_info):
         self.layer_sizes = layer_sizes

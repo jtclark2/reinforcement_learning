@@ -14,8 +14,7 @@ class Smoother:
         self.param = 0
 
     def update_param(self, param, remove_bias=True):
-        self.param = self.b * self.param + (
-                    1 - self.b) * param  # not sure why param coefficient=(1-b)...that's usually ~1 anyways
+        self.param = self.b * self.param + (1 - self.b) * param
         # Which is the same as the incremental update equation (prove it with some simple algebra):
         #             = (self.b-1+1)*self.param + (1-self.b)*param
         #             = (self.b-1)*self.param + (1-self.b)*param +self.param

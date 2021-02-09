@@ -27,7 +27,7 @@ class PlottingTools:
 
                 variable1[index1, index2] = var1
                 variable2[index1, index2] = var2
-                value[index1,index2] = np.average(value_approximator.get_values(np.array([var1, var2])))
+                value[index1,index2] = np.average(value_approximator.get_action_values(np.array([var1, var2])))
 
         fig = plt.figure()
         ax = fig.add_subplot(111, projection='3d')
@@ -42,7 +42,10 @@ class PlottingTools:
         # smoothing = min(len(results)//2, smoothing)
         # running_avg = [np.average(results[x:x+smoothing]) for x, _ in enumerate(results[:-smoothing])]
         smoother = Smoother()
+        # smoother.b = 1-1/smoothing
+        # smooth = smoother.update_param(results[-1])
         smooth = smoother.average_entire_list(results, full_range=smoothing)
+        plt.cla()
         # plt.figure(figsize=(12, 8), dpi=80, facecolor='w', edgecolor='k')
         plt.plot(smooth)
         plt.xlabel("Episode")
