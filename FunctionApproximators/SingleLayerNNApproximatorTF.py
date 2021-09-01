@@ -36,9 +36,8 @@ class SingleLayerNNApproximatorTF:
 
         # TODO (should work): LR Update
         # How do I do this? LR is going to be TD in this case...
-        # Set self.learning_rate, and then use the LearningRateSchedular, on_batch_begin (that might need to be custom)
-        # in order to update learning_rate=self.learning_rate*self.td_error, where td_error is of course being set by
-        # our agent's update
+        # Set self.learning_rate, via custom callback, on_batch_begin, in order to update
+        # learning_rate=self.learning_rate*self.td_error
         self.optimizer = tf.keras.optimizers.Adam(learning_rate=0.005)
 
 

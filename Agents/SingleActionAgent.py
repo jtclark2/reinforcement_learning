@@ -2,7 +2,9 @@ import numpy as np
 
 class SingleActionAgent:
     """
-    Use this to test new environments. A sort of "Hello World" agent. It will always output action 0.
+    Use this to test new environments. A sort of "Hello World" agent. It will always output the same action,
+    so you can initialize a world with pretty high confidence that this will work. 0 should always be a valid action,
+    but if not, toggle it to a valid value.
     """
 
     def __init__(self, action=0):

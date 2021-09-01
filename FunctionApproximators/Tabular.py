@@ -1,6 +1,7 @@
 """
 Disclaimer: I wrote this up as I 'think' it should work, but haven't actually tested. Need to look through gym to find
-simple enough problem. I've been working with continuous spaces so far, not tabular.
+simple enough problem. Most state_spaces are continuous, so I haven't tested this yet.
+TODO: Test with the RandomWalk (just set to like 10 steps)
 """
 
 from FunctionApproximators import AbstractFunctionApproximator

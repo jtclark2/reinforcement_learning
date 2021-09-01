@@ -8,7 +8,7 @@ class Space:
 class RandomWalkEnv:
     """
     Not really a complete environment (not registered, and doesn't comply with the gym interface; however,
-    it supports the methods I need for this project.
+    it supports most methods, and everything used in this project.
     """
     def __init__(self):
         self.action_space = Space(2) # {0: left or 1: right}
